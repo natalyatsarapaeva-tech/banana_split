@@ -1149,7 +1149,13 @@ async function boot() {
   await Promise.all([loadImage('bg1', 'assets/bg1.jpg'), loadImage('bg2', 'assets/bg2.jpg'), loadImage('map', 'assets/map.jpg'), fontP]);
   ['bg3', 'bg4', 'bg5', 'party'].forEach(k => loadImage(k, 'assets/' + k + '.jpg'));
   document.getElementById('loading').style.display = 'none';
-  UI.title();
+  // index.html?world=2 opens World 2 straight away (World 1 progress is left as it is)
+  const wq = +new URLSearchParams(location.search).get('world');
+  const wTo = WORLDS.findIndex(w => w.id === wq);
+  if (wTo > 0) {
+    Save.data.worldsOpen = Object.assign({}, Save.data.worldsOpen, { [wq]: true }); Save.data.introSeen = true; Save.save();
+    UI.map(undefined, wTo);
+  } else UI.title();
   requestAnimationFrame(frame);
 }
 boot();

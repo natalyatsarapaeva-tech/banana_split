@@ -22,7 +22,7 @@ addWorld(Object.assign({
   sheepName: 'Огурчики',
   assets: [['w2bg1', 'assets/w2/bg1.jpg'], ['w2bg2', 'assets/w2/bg2.jpg'], ['w2bg3', 'assets/w2/bg3.jpg']], // level backgrounds, loaded when the map opens
   levels: W2_LEVELS,
-  unlocked: () => !!Save.data.done[5],
+  unlocked: () => !!Save.data.done[5] || !!(Save.data.worldsOpen || {})[2], // after World 1, or opened with ?world=2
   finished: () => !!Save.data.done['2-10'],
   intro: [
     'Лето! Банни, Пикль и Крошка приплыли отдохнуть на фруктовые острова Тутти-Фрутти: пляжи из кокосовой стружки, море из газировки, пальмы с бананами.',
