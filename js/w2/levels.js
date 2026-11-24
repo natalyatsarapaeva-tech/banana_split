@@ -16,7 +16,8 @@ const W2_LEVELS = [
 ];
 
 addWorld(Object.assign({
-  id: 2, name: 'Фруктовый Архипелаг', map: 'map2', mapSrc: 'assets/w2/map.jpg', mapBg: ['#2fb5c4', '#7fe0d0'], cursor: 'boat',
+  id: 2, name: 'Фруктовый Архипелаг', map: 'map2', mapSrc: 'assets/w2/map.jpg', mapSize: [1376, 768], mapBg: ['#2fb5c4', '#7fe0d0'], cursor: 'boat',
+  music: false, // по решению автора в мире 2 музыки нет, только звуки
   levels: W2_LEVELS,
   unlocked: () => !!Save.data.done[5],
   finished: () => !!Save.data.done['2-10']

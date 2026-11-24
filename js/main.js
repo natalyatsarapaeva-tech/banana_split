@@ -27,7 +27,8 @@ const G = window.__G = {
     this.zones = this.ents.filter(e => e.zone);
     this.timers = []; this.autoscroll = null; this.flood = null; this.rideStarted = false; this.winBalloon = null; this.winRide = false;
     this.rcherries = 0; this.bonusTime = 0; this.bonusPenalty = 0; this.bonusDone = false;
-    Audio2.music(def.musicRate); Audio2.muffle(false); Audio2.setTone(def.tone || 20000);
+    if (worldOfLevel(id).music === false) Audio2.silence(); else Audio2.music(def.musicRate);
+    Audio2.muffle(false); Audio2.setTone(def.tone || 20000);
     UI.hide(); Touch.update();
     this.setState('levelIntro');
   },
@@ -94,7 +95,7 @@ const G = window.__G = {
   },
   tears(t) { if (this.tearsT <= 0) Audio2.play('tears'); this.tearsT = Math.max(this.tearsT, t); },
   toast(text) { this.toasts.push({ text, t: 2.4 }); },
-  hint(id, text) { if (this.hintsShown.has(id)) return; this.hintsShown.add(id); this.pickle.speak(text); },
+  hint(id, text) { if (!Save.data.settings.hints || this.hintsShown.has(id)) return; this.hintsShown.add(id); this.pickle.speak(text); },
   npcSay(ent, text) { this.npcBubble = { ent, text, t: 4.5 }; },
   addSlime(x, y) { this.slime.push({ x, y, life: 6 }); if (this.slime.length > 120) this.slime.shift(); },
   slimeAt(x, y) { for (const s of this.slime) if (Math.abs(s.x - x) < 15 && Math.abs(s.y - y) < 6) return true; return false; },
@@ -129,6 +130,7 @@ const G = window.__G = {
   openNote(id) {
     Audio2.play('note'); this.stats.notes++;
     Save.data.notes[id] = 1; Save.save();
+    if (!Save.data.settings.notes) { this.toast('Записка сохранена'); return; }
     this.setState('note'); Audio2.muffle(true);
     UI.note(NOTES[id], () => { Audio2.muffle(false); this.setState('play'); });
   },
@@ -160,6 +162,7 @@ const G = window.__G = {
       if (this.def.exitGate) this.def.exitGate.open();
       this.later(1.3, () => {
         if (this.state !== 'play') return;
+        if (!Save.data.settings.hints) { Audio2.play('power'); this.toast('Новое умение: прыжок от стены'); return; }
         this.setState('modal'); Audio2.play('power');
         UI.modal('Новое умение!', 'Прыжок от стены', `Прыгни к стене и в воздухе снова нажми ${Input.label('jump')} — Банни оттолкнётся и подпрыгнет выше. Так можно забраться даже в узкую шахту!`, () => { this.setState('play'); this.pickle.speak('Шар Капитана Безе ждёт наверху — в шахте справа! Прыгай от стены к стене!', 6, true); });
       });
@@ -664,7 +667,7 @@ const Scenes = {
     drawCherryPair(g, -50, -H - 30);
     g.restore();
   },
-  mapRect(W) { const areaH = VIEW_H - 112; const sc = Math.min(W / 1376, areaH / 768); return { s: sc, x: (W - 1376 * sc) / 2, y: 4 }; },
+  mapRect(W) { const [mw, mh] = UI.world().mapSize || [1376, 768], areaH = VIEW_H - 112; const sc = Math.min(W / mw, areaH / mh); return { s: sc, x: (W - mw * sc) / 2, y: 4, w: mw * sc, h: mh * sc }; },
   mapNodes(W) { const r = this.mapRect(W); return UI.world().levels.map(i => ({ x: r.x + i.node[0] * r.s, y: r.y + i.node[1] * r.s })); },
   pill(g, x, y, text, size, col, bg) {
     g.font = `900 ${size}px Nunito, sans-serif`; const w = g.measureText(text).width + size * 1.1, h = size * 1.6;
@@ -677,15 +680,15 @@ const Scenes = {
     for (let i = 0; i < 30; i++) { g.globalAlpha = 0.4 + Math.sin(t * 2 + i) * 0.3; sparkle(g, (i * 97) % W, (i * 61) % (VIEW_H - 110), 1.5 + (i % 3), '#fff6d0'); }
     g.globalAlpha = 1;
     const w = UI.world(), img = ASSETS[w.map];
-    if (img) g.drawImage(img, r.x, r.y, 1376 * r.s, 768 * r.s);
+    if (img) g.drawImage(img, r.x, r.y, r.w, r.h);
     else if (w.mapBg) {
-      const gr = g.createLinearGradient(0, r.y, 0, r.y + 768 * r.s); gr.addColorStop(0, w.mapBg[0]); gr.addColorStop(1, w.mapBg[1]);
-      rrect(g, r.x, r.y, 1376 * r.s, 768 * r.s, 24 * r.s); fs(g, gr, 'rgba(74,36,16,0.6)', 3);
+      const gr = g.createLinearGradient(0, r.y, 0, r.y + r.h); gr.addColorStop(0, w.mapBg[0]); gr.addColorStop(1, w.mapBg[1]);
+      rrect(g, r.x, r.y, r.w, r.h, 24 * r.s); fs(g, gr, 'rgba(74,36,16,0.6)', 3);
     }
     const fsz = Math.max(10, Math.round(22 * r.s));
     // map art may carry its own captions; without art, captions are drawn under the nodes
     w.levels.forEach((info) => { const lb = info.label || (img ? null : [info.node[0], info.node[1] + 44]); if (lb) this.pill(g, r.x + lb[0] * r.s, r.y + lb[1] * r.s, info.name, fsz, info.bonus ? '#a03a7a' : '#6a3214'); });
-    if (w.titlePill) this.pill(g, r.x + 688 * r.s, r.y + 742 * r.s, w.titlePill, Math.round(fsz * 1.3), '#b03070', 'rgba(255,240,250,0.95)');
+    if (w.titlePill) this.pill(g, r.x + r.w / 2, r.y + r.h - 26 * r.s, w.titlePill, Math.round(fsz * 1.3), '#b03070', 'rgba(255,240,250,0.95)');
     const nodes = this.mapNodes(W);
     nodes.forEach((n, i) => {
       const info = w.levels[i], un = UI.levelUnlocked(info), sel = UI.mapSel === i, done = Save.data.done[info.id];
@@ -765,7 +768,7 @@ const UI = {
   },
   // ---- screens ----
   title() {
-    G.setState('title'); this.under = 'title'; Audio2.wantMusic = true;
+    G.setState('title'); this.under = 'title'; Audio2.music(1);
     const has = Save.data.unlocked > 1 || Save.data.introSeen;
     this.html('title', `
       <div class="menu bottom">
@@ -774,7 +777,7 @@ const UI = {
         <button id="b-set">Настройки</button>
       </div>
       <div class="foot">Музыка: «Morning Adventure» · ${IS_TOUCH ? 'Сенсорное управление' : 'Клавиатура или геймпад'}</div>`);
-    this.el.querySelector('#b-play').onclick = () => { Audio2.music(1); if (!Save.data.introSeen) this.intro(); else this.map(undefined, Save.data.world); };
+    this.el.querySelector('#b-play').onclick = () => { if (!Save.data.introSeen) this.intro(); else this.map(undefined, Save.data.world); };
     const bn = this.el.querySelector('#b-new');
     if (bn) bn.onclick = () => this.confirm('Начать заново?', 'Прогресс (открытые уровни и вишенки) будет стёрт.', () => { Save.reset(); Audio2.music(1); this.intro(); }, () => this.title());
     this.el.querySelector('#b-set').onclick = () => this.settings(() => this.title());
@@ -790,10 +793,13 @@ const UI = {
           <button id="s-sfx">Звуки: ${Math.round(s.sfx * 100)}%</button>
           <button id="s-easy">Лёгкий режим: ${s.easy ? 'вкл' : 'выкл'}</button>
           <button id="s-touch">Сенсорные кнопки: ${{ auto: 'авто', on: 'вкл', off: 'выкл' }[s.touch]}</button>
+          <button id="s-hints">Подсказки: ${s.hints ? 'вкл' : 'выкл'}</button>
+          <button id="s-notes">Записки: ${s.notes ? 'вкл' : 'выкл'}</button>
           <button id="s-full">Во весь экран</button>
           <button id="s-back">Назад</button>
         </div>
         <p class="small">Лёгкий режим: больше спелости и жизней, а падение в пропасть не отнимает жизнь.</p>
+        <p class="small">Подсказки и записки можно выключить при повторном прохождении: записки всё равно собираются, просто не открываются.</p>
         <p class="small">Клавиши: ← → бег · ПРОБЕЛ/Z прыжок · ↓ подкат · X выстрел · C бросить Пикля · Esc пауза</p></div>`, 'dim');
       const f = this.focus;
       const step = v => { v = Math.round((v + 0.2) * 10) / 10; return v > 1.001 ? 0 : v; };
@@ -801,6 +807,8 @@ const UI = {
       this.el.querySelector('#s-sfx').onclick = () => { s.sfx = step(s.sfx); Save.save(); Audio2.applyVolumes(); keep(1); };
       this.el.querySelector('#s-easy').onclick = () => { s.easy = !s.easy; Save.save(); if (G.player) { G.player.hp = Math.min(G.player.hp, G.player.maxHp); } keep(2); };
       this.el.querySelector('#s-touch').onclick = () => { s.touch = { auto: 'on', on: 'off', off: 'auto' }[s.touch]; Save.save(); Touch.update(); keep(3); };
+      this.el.querySelector('#s-hints').onclick = () => { s.hints = !s.hints; Save.save(); if (!s.hints && G.pickle) G.pickle.dismiss(); keep(4); };
+      this.el.querySelector('#s-notes').onclick = () => { s.notes = !s.notes; Save.save(); keep(5); };
       this.el.querySelector('#s-full').onclick = () => { try { const d = document.documentElement; if (!document.fullscreenElement) { const p = d.requestFullscreen ? d.requestFullscreen() : (d.webkitRequestFullscreen && d.webkitRequestFullscreen()); if (p && p.catch) p.catch(() => { }); } else if (document.exitFullscreen) document.exitFullscreen(); } catch (e) { } };
       this.el.querySelector('#s-back').onclick = () => { G.setState(prevState); back(); };
       this.onBack = () => { G.setState(prevState); back(); };
@@ -850,11 +858,12 @@ const UI = {
   },
   map(sel, wi) {
     G.setState('map'); this.under = 'map'; G.level = null; canvas.style.filter = '';
-    Audio2.muffle(false); Audio2.setRate(1); Audio2.setTone(20000); Audio2.music(1);
+    Audio2.muffle(false); Audio2.setRate(1); Audio2.setTone(20000);
     if (wi !== undefined && WORLDS[wi] && WORLDS[wi].unlocked()) this.worldIdx = wi;
     if (!this.world().unlocked()) this.worldIdx = 0;
     if (Save.data.world !== this.worldIdx) { Save.data.world = this.worldIdx; Save.save(); }
     const w = this.world();
+    if (w.music === false) Audio2.silence(); else Audio2.music(1);
     if (!ASSETS[w.map] && w.mapSrc) loadImage(w.map, w.mapSrc);
     this.mapSel = sel !== undefined ? clamp(sel, 0, w.levels.length - 1) : w.defaultSel();
     this.mapPanel();

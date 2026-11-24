@@ -30,7 +30,7 @@ const Save = {
     return {
       unlocked: 1, done: {}, cherries: { 1: [0, 0, 0], 2: [0, 0, 0], 3: [0, 0, 0], 4: [0, 0, 0], 5: [0, 0, 0] }, notes: {}, sheep: {}, best: {},
       wallJump: false, introSeen: false, world: 0,
-      settings: { music: 0.6, sfx: 0.8, easy: false, touch: 'auto' }
+      settings: { music: 0.6, sfx: 0.8, easy: false, touch: 'auto', hints: true, notes: true }
     };
   },
   load() {
@@ -166,6 +166,12 @@ const Audio2 = {
     } catch (e) { this.el = null; }
   },
   wantMusic: false,
+  // stop the theme (worlds without music)
+  silence() {
+    this.wantMusic = false;
+    if (this.src) { try { this.src.stop(); } catch (e) { } this.src = null; }
+    if (this.el) { try { this.el.pause(); } catch (e) { } }
+  },
   music(rate) {
     this.wantMusic = true;
     if (rate) this.setRate(rate);
