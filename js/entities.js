@@ -22,6 +22,13 @@ class Player extends Ent {
     this.lastSafe = { x: x, y: y }; this.fireCd = 0; this.hurtT = 0; this.glide = false; this.shootT = 0;
     this.onGround = false; this.prevBottom = this.bottom; this.dustT = 0; this.safeT = 0;
     this.char = 'banni'; this.airJumps = 1; this.flipT = 0; this.pounding = false; this.swimming = false; this.sink = 0; this.leech = null;
+    this.air = 1; this.wet = false; this.underwater = false; this.crunchT = 0; this.crunchCd = 0; this.dashT = 0; this.dashCd = 0; this.helmet = false; this.armor = false;
+  }
+  // switch the playable hero without the swap effects (level start, respawn)
+  setChar(G, to) {
+    const b = this.bottom, cx = this.cx;
+    this.char = to; this.w = to === 'pickle' ? 22 : 26; this.h = to === 'pickle' ? 46 : 50; this.x = cx - this.w / 2; this.y = b - this.h;
+    if (G.pickle) G.pickle.asBanni = to === 'pickle';
   }
   get maxHp() { return Save.data.settings.easy ? 5 : 3; }
   startSlide() {
@@ -71,6 +78,12 @@ class Player extends Ent {
     if (Input.pressed('swap') && G.def.swap) this.trySwap(G);
     // liquids
     const liq = G.liquidAt(this.cx, this.y + this.h * 0.62);
+    this.crunchCd -= dt; this.dashCd -= dt;
+    if (this.crunchT > 0) { this.updateCrunch(G, dt); return; }
+    if (this.dashT > 0) { this.updateDash(G, dt); return; }
+    if (liq === TL.WATER) { if (this.updateWater(G, dt, mx)) return; }
+    else { if (this.wet) this.leaveWater(G); this.leapT = 0; this.breathe(G, dt); }
+    if (Input.pressed('pickle') && this.char === 'pickle') this.tryCrunch(G);
     if (liq === TL.CHOC) {
       if (this.char === 'pickle') { this.updateSwim(G, dt, mx); return; }
       this.drown(G); return;
@@ -94,6 +107,7 @@ class Player extends Ent {
       else if (fudge) { maxV = 150 - this.sink * 2; acc = 800; }
       if (this.leech) maxV *= 0.5;
       if (this.char === 'pickle') maxV *= 0.93;
+      if (this.wet) maxV *= 0.6;
       if (this.boostT > 0) {
         this.boostT -= dt; if (mx) this.face = mx;
         if (mx && this.vx * mx < 0) { this.vx += mx * 900 * dt; }
@@ -119,6 +133,7 @@ class Player extends Ent {
         if (sticky) v *= 0.74;
         if (this.sink) v *= 1 - this.sink / 80;
         if (this.leech) v *= 0.78;
+        if (this.wet) v *= 0.66;
         this.vy = -v; this.jumpBuf = 0; this.coyote = 0; this.cutOk = true; this.onGround = false; this.standOn = null; this.sink = 0;
         this.sx = 0.82; this.sy = 1.2; Audio2.play('jump');
         G.dust(this.cx, this.bottom, 5);
@@ -148,7 +163,7 @@ class Player extends Ent {
     // gravity & forces
     this.glide = false;
     if (this.cutOk && !Input.held('jump') && this.vy < -PHYS.jumpCut) this.vy = -PHYS.jumpCut;
-    this.vy += PHYS.grav * dt;
+    this.vy += PHYS.grav * dt * (this.wet ? 0.38 : 1);
     if (this.vy >= 0) this.cutOk = false;
     const para = this.power === 'parachute' && this.char === 'banni' && Input.held('jump') && !this.sliding;
     const up = G.updraftAt(this.cx, this.cy);
@@ -159,12 +174,13 @@ class Player extends Ent {
     if (this.wallSlide) { this.vy = Math.min(this.vy, 130); if (Math.random() < 0.3) G.dust(this.wallSlide > 0 ? this.x + this.w : this.x, this.y + 10, 1); }
     if (this.pounding) this.vy = Math.max(this.vy, 980);
     if (this.vy > (this.pounding ? 1000 : PHYS.maxFall)) this.vy = this.pounding ? 1000 : PHYS.maxFall;
+    if (this.wet && this.vy > 190 && !this.pounding) this.vy = 190;
     // move
     this.prevBottom = this.bottom;
     const impact = this.vy;
     moveBody(this, G, dt);
     if (this.hitCeil && this.ceilEnt && this.ceilEnt.hit) this.ceilEnt.hit(G, this);
-    else if (this.hitCeil) Audio2.play('bump');
+    else if (this.hitCeil && !(this.helmet && this.headBreak(G))) Audio2.play('bump');
     if (this.onGround) {
       if (this.groundT === TL.CONVL || this.groundT === TL.CONVR) {
         const d = (this.groundT === TL.CONVR ? 1 : -1) * 100 * dt;
@@ -184,7 +200,7 @@ class Player extends Ent {
       if (this.groundT === TL.GRATER) this.hurt(G, null);
       if (!this.standOn && isGroundish(this.groundT) && !this.sliding && this.groundT !== TL.FUDGE && this.groundT !== TL.GRATER && this.groundT !== TL.CRACK) {
         this.safeT -= dt;
-        if (this.safeT <= 0 && groundBelow(G, this.x + 2, this.bottom + 4) && groundBelow(G, this.x + this.w - 2, this.bottom + 4) && !G.hazardNear(this)) {
+        if (this.safeT <= 0 && !this.wet && groundBelow(G, this.x + 2, this.bottom + 4) && groundBelow(G, this.x + this.w - 2, this.bottom + 4) && !G.hazardNear(this)) {
           this.lastSafe = { x: this.cx, y: this.bottom }; this.safeT = 0.3;
         }
       }
@@ -196,12 +212,14 @@ class Player extends Ent {
     if (this.sliding && this.onGround && Math.random() < 0.6) G.spark(this.cx - this.face * 20, this.bottom - 2, '#ffffff');
     if (G.thornAt(this.x + 5, this.y + 8, this.w - 10, this.h - 10)) this.hurt(G, null);
     if (this.bottom > G.level.H * T - 14) this.fall(G);
-    if (Input.pressed('fire') && this.fireCd <= 0 && this.char === 'banni') this.shoot(G);
+    if (Input.pressed('fire') && this.power === 'flipper') this.tryDash(G);
+    else if (Input.pressed('fire') && this.fireCd <= 0 && this.char === 'banni') this.shoot(G);
     if (Input.pressed('pickle') && this.char === 'banni') G.pickle.throwIt(G);
   }
   G_parts(G) { G.parts.push({ k: 'bit', x: this.cx - this.face * 14, y: this.y + rnd(10, this.h - 6), vx: -this.face * rnd(60, 160), vy: rnd(-30, 30), life: 0.4, max: 0.4, c: pick(RAINBOW), s: 3.5, r: 0, g: 0 }); }
   trySwap(G) {
-    if (this.state !== 'play' || this.sliding || this.swimming || !this.onGround) { if (!this.onGround) G.toast('Меняться можно на земле'); return; }
+    const sea = this.wet || G.liquidAt(this.cx, this.cy) === TL.WATER;
+    if (this.state !== 'play' || this.sliding || (this.swimming && !sea) || (!this.onGround && !sea)) { if (!this.onGround) G.toast('Меняться можно на земле'); return; }
     const to = this.char === 'banni' ? 'pickle' : 'banni';
     const nw = to === 'pickle' ? 22 : 26, nh = to === 'pickle' ? 46 : 50;
     const cx = this.cx, b = this.bottom;
@@ -254,6 +272,7 @@ class Player extends Ent {
       if (!e.alive || !e.enemy || e.frozen > 0) continue;
       if (Math.abs(e.cx - this.cx) < 80 && Math.abs(e.bottom - this.bottom) < 30) { if (e.onPound) e.onPound(G, this); else if (!e.boss) e.kill(G, 'stomp'); }
     }
+    for (const e of G.ents) if (e.alive && e.poundable && Math.abs(e.cx - this.cx) < 60 && Math.abs(e.bottom - this.bottom) < 40) e.onPound(G, this);
   }
   enterBalloon(G, ride) {
     if (this.sliding) { this.sliding = false; }
@@ -303,6 +322,12 @@ class Player extends Ent {
       const d = src ? (sign(this.cx - src.cx) || -this.face) : -this.face; this.vy = -380; this.vx = d * 240; this.onGround = false; this.boostT = 0;
       return;
     }
+    if (this.helmet || this.armor) {
+      if (this.armor) this.armor = false; else this.helmet = false;
+      this.inv = 1.3; Audio2.play('crack');
+      G.burst(this.cx, this.y + 10, 14, ['#8a5a2a', '#c8a070', '#f2e6c8', '#f2c230']);
+      return;
+    }
     if (this.glaze) {
       this.glaze = false; this.inv = 1.3; Audio2.play('crack');
       G.burst(this.cx, this.y + 15, 16, ['#6a3a1e', '#8a4a22', '#4a2410', '#ffffff']);
@@ -346,6 +371,7 @@ class Player extends Ent {
   respawnAt(x, y) {
     if (this.sliding) { this.sliding = false; this.h = this.char === 'pickle' ? 46 : 50; }
     this.pounding = false; this.swimming = false; this.sink = 0; this.airJumps = 1; this.flipT = 0;
+    this.wet = false; this.underwater = false; this.air = 1; this.crunchT = 0; this.dashT = 0;
     this.x = x - this.w / 2; this.y = y - this.h; this.vx = 0; this.vy = 0; this.onGround = false; this.standOn = null;
     this.state = 'play'; this.vine = null;
   }
@@ -390,7 +416,7 @@ class Player extends Ent {
     else if (!this.onGround) pose = this.vy < 0 ? 'jump' : 'fall';
     else if (Math.abs(this.vx) > 20) pose = 'run';
     const face = this.wallSlide ? this.wallSlide : this.face;
-    const spin = this.flipT > 0 ? (1 - this.flipT / 0.42) * TAU * face : 0;
+    const spin = this.flipT > 0 ? (1 - this.flipT / 0.42) * TAU * face : (this.swimming && this.underwater && this.char === 'banni' ? clamp(this.vx / 230, -1, 1) * 1.1 : 0);
     const sunk = this.sink > 0;
     if (sunk) { g.save(); g.beginPath(); g.rect(this.cx - 80, this.bottom - 300, 160, 300); g.clip(); g.translate(0, this.sink); }
     if (this.char === 'pickle') {
@@ -409,6 +435,7 @@ class Player extends Ent {
     }
     if (this.leech && this.leech.alive) drawLeech(g, this.cx - this.face * 8, this.y + this.h * 0.55, { t: this.t, face: -this.face, attached: true });
     if (sunk) g.restore();
+    if (typeof drawHeroExtras === 'function') drawHeroExtras(g, this, G);
   }
 }
 
@@ -858,17 +885,19 @@ class Pickup extends Ent {
       case 'cherry': p.power = 'cherry'; Audio2.play('power'); G.add(new TextFx(this.cx, this.y, 'Вишнемёт!', '#ffb0b0')); G.hint('cherry', `Вишнемёт! Жми ${Input.label('fire')} — стреляй вишнёвыми косточками.`); break;
       case 'mint': p.power = 'mint'; Audio2.play('power'); G.add(new TextFx(this.cx, this.y, 'Мятный леденец!', '#c8fff0')); G.hint('mint', `Мятный леденец! Жми ${Input.label('fire')} — замораживай врагов. На замёрзших можно стоять!`); break;
       case 'parachute': p.power = 'parachute'; Audio2.play('power'); G.add(new TextFx(this.cx, this.y, 'Парашют!', '#ffd6e8')); G.hint('para', `Парашют из сахарной ваты! В прыжке держи ${Input.label('jump')} — будешь медленно парить.`); break;
+      default: if (typeof collectW2 === 'function') collectW2(G, this, p); break;
       case 'star': p.star = 10; Audio2.play('power'); Audio2.setRate(G.musicRate * 1.15); G.add(new TextFx(this.cx, this.y, 'Звёздная посыпка!', '#fff6a0')); break;
     }
   }
-  draw(g) {
+  draw(g, G) {
     const x = this.cx, y = this.cy;
+    if (this.drawW2 && this.drawW2(g, G)) return;
     if (this.rise > 0) { g.save(); g.beginPath(); g.rect(x - 40, this.top - 200, 80, 200); g.clip(); }
     switch (this.kind) {
       case 'drop': drawDrop(g, x, y, this.t * 2.5); break;
       case 'gold': drawGoldCherry(g, x, y, this.t); break;
       case 'rcherry': { g.save(); const hue = (this.t * 120) % 360; const gl = g.createRadialGradient(x, y, 2, x, y, 26); gl.addColorStop(0, `hsla(${hue},100%,75%,0.7)`); gl.addColorStop(1, `hsla(${hue + 60},100%,70%,0)`); g.fillStyle = gl; circ(g, x, y, 26); g.fill(); g.restore(); drawGoldCherry(g, x, y, this.t); break; }
-      case 'note': drawFortune(g, x, y, this.t); break;
+      case 'note': if (G.theme.world === 2) drawBottle(g, x, y, this.t); else drawFortune(g, x, y, this.t); break;
       case 'ice': drawIceCube(g, x, y, this.t); break;
       default: {
         const gl = g.createRadialGradient(x, y, 2, x, y, 24); gl.addColorStop(0, 'rgba(255,255,255,0.7)'); gl.addColorStop(1, 'rgba(255,255,255,0)');
@@ -893,7 +922,7 @@ class Block extends Ent {
     for (const e of G.ents) if (e.alive && e instanceof Pickup && !(e.rise > 0) && Math.abs(e.cx - this.cx) < 30 && e.bottom <= this.y + 6 && e.bottom >= this.y - 48) e.collect(G);
     for (const e of G.ents) if (e.alive && e.enemy && !e.boss && e.frozen <= 0 && e.x < this.x + this.w && e.x + e.w > this.x && Math.abs(e.bottom - this.y) < 6) e.kill(G, 'bump');
     if (this.kind === 'brick') {
-      if (p.glaze) { this.alive = false; this.solid = null; Audio2.play('break'); G.burst(this.cx, this.cy, 16, ['#6a3a1e', '#8a4e28', '#4a2410']); G.collectDrop(1); }
+      if (p.glaze || p.helmet) { this.alive = false; this.solid = null; Audio2.play('break'); G.burst(this.cx, this.cy, 16, ['#6a3a1e', '#8a4e28', '#4a2410']); G.collectDrop(1); }
       else Audio2.play('bump');
       return;
     }

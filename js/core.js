@@ -29,7 +29,7 @@ const Save = {
   defaults() {
     return {
       unlocked: 1, done: {}, cherries: { 1: [0, 0, 0], 2: [0, 0, 0], 3: [0, 0, 0], 4: [0, 0, 0], 5: [0, 0, 0] }, notes: {}, sheep: {}, best: {},
-      wallJump: false, introSeen: false, world: 0,
+      wallJump: false, introSeen: false, world: 0, crunch: false, worldIntro: {},
       settings: { music: 0.6, sfx: 0.8, easy: false, touch: 'auto', hints: true, notes: true }
     };
   },

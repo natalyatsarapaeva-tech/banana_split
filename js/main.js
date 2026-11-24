@@ -21,10 +21,13 @@ const G = window.__G = {
     this.checkpoint = null;
     this.player = new Player(def.start.x, def.start.y);
     this.pickle = new Pickle(def.start.x - 40, def.start.y);
+    if (def.startChar) this.player.setChar(this, def.startChar);
+    this.boatParts = 0;
     this.terrain = new TerrainCache(this); this.terrain.setScale(this.S);
     this.cam = new Camera(); this.cam.reset(this, this.player);
     this.solids = this.ents.filter(e => e.solid);
     this.zones = this.ents.filter(e => e.zone);
+    this.waters = this.ents.filter(e => e.water);
     this.timers = []; this.autoscroll = null; this.flood = null; this.rideStarted = false; this.winBalloon = null; this.winRide = false;
     this.rcherries = 0; this.bonusTime = 0; this.bonusPenalty = 0; this.bonusDone = false;
     if (worldOfLevel(id).music === false) Audio2.silence(); else Audio2.music(def.musicRate);
@@ -50,8 +53,9 @@ const G = window.__G = {
     if (this.flood) { const t = this.ents.find(e => e.alive && e instanceof ToastPlat && Math.abs(e.cx - p.cx) > 150 && e.baseY > ar.floor - 200); if (!t) return; x = t.cx; y = t.baseY - 30; }
     this.add(new Pickup('ice', x, y)); this.burst(x, y, 10, ['#d6f3ff', '#ffffff']);
   },
-  liquidAt(x, y) { const t = this.level.tileAt(x, y); if (isLiquidT(t)) return t; if (this.flood && y > this.flood.y && x > this.flood.x0 && x < this.flood.x1) return TL.BROTH; return 0; },
+  liquidAt(x, y) { if (this.waters.length && waterAt(this, x, y)) return TL.WATER; const t = this.level.tileAt(x, y); if (isLiquidT(t)) return t; if (this.flood && y > this.flood.y && x > this.flood.x0 && x < this.flood.x1) return TL.BROTH; return 0; },
   liquidSurface(x, y) {
+    if (this.waters.length) { const w = waterAt(this, x, y) || waterAt(this, x, y + T); if (w) return w.surfaceY(this.time); }
     if (this.flood && y > this.flood.y - 4 && x > this.flood.x0 && x < this.flood.x1) return this.flood.y;
     const c = Math.floor(x / T); let r = Math.floor(y / T);
     if (!isLiquidT(this.level.get(c, r))) { if (isLiquidT(this.level.get(c, r + 1))) r++; else return null; }
@@ -62,7 +66,7 @@ const G = window.__G = {
   graterBeside(p, dir) { const x = dir > 0 ? p.x + p.w + 2 : p.x - 2; for (let y = p.y + 4; y < p.bottom - 4; y += 12) if (this.level.tileAt(x, y) === TL.GRATER) return true; return false; },
   breakTile(c, r) {
     this.level.set(c, r, TL.EMPTY); this.terrain.invalidateTile(c, r);
-    this.burst(c * T + 20, r * T + 20, 14, this.theme.id === 5 ? ['#6a4a40', '#3a2a2a', '#c8a080'] : ['#d8a058', '#8a5a1e', '#fff0d0']); Audio2.play('break');
+    this.burst(c * T + 20, r * T + 20, 14, this.theme.breakColors || (this.theme.id === 5 ? ['#6a4a40', '#3a2a2a', '#c8a080'] : ['#d8a058', '#8a5a1e', '#fff0d0'])); Audio2.play('break');
   },
   dialog(lines, done) {
     this.setState('dialog'); Audio2.muffle(true);
@@ -202,7 +206,7 @@ const G = window.__G = {
     this.flood = null;
     const p = this.player;
     if (p.leech) { p.leech.alive = false; p.leech = null; }
-    p.char = 'banni'; p.w = 26; p.h = 50; this.pickle.asBanni = false;
+    p.setChar(this, d.startChar || 'banni');
     if (cp.ride) {
       p.hp = p.maxHp; p.glaze = false; p.star = 0; p.inv = 2;
       this.cam.x = this.rideStartX; this.cam.y = d.ride.camY;
@@ -345,6 +349,7 @@ const G = window.__G = {
     this.theme.drawBackground(ctx, this, cx, cy, S);
     ctx.setTransform(S, 0, 0, S, -cx * S, -cy * S);
     this.theme.drawLiquid(ctx, this, cx, cy);
+    if (this.waters.length) drawWaters(ctx, this, false);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.terrain.draw(ctx, cx, cy, this.viewW, VIEW_H);
     ctx.setTransform(S, 0, 0, S, -cx * S, -cy * S);
@@ -368,15 +373,15 @@ const G = window.__G = {
     // entities by layer
     const vx0 = cx - 160, vx1 = cx + this.viewW + 160, vy0 = cy - 400, vy1 = cy + VIEW_H + 200;
     const vis = this.ents.filter(e => e.alive && e.x + e.w > vx0 && e.x < vx1 && e.y + e.h > vy0 && e.y < vy1 || e.boss);
-    const layer = e => (e instanceof Vine || e instanceof Checkpoint || e instanceof Cage || e instanceof Dripper || e instanceof Gate || e.zone || e instanceof Geyser || e instanceof Whirlpool || e instanceof Misha || e instanceof Spectator || e instanceof Finish) ? 0 : (e.solid && !e.enemy) ? 1 : e instanceof Pickup ? 2 : e.fx ? 5 : (e instanceof CherryPit || e instanceof MintShot) ? 4 : 3;
+    const layer = e => e.layer !== undefined ? e.layer : (e instanceof Vine || e instanceof Checkpoint || e instanceof Cage || e instanceof Dripper || e instanceof Gate || e.zone || e instanceof Geyser || e instanceof Whirlpool || e instanceof Misha || e instanceof Spectator || e instanceof Finish) ? 0 : (e.solid && !e.enemy) ? 1 : e instanceof Pickup ? 2 : e.fx ? 5 : (e instanceof CherryPit || e instanceof MintShot) ? 4 : 3;
     const layers = [[], [], [], [], [], []];
     for (const e of vis) layers[layer(e)].push(e);
     for (let i = 0; i <= 2; i++) for (const e of layers[i]) e.draw(ctx, this);
     if (this.winBalloon) { /* balloon drawn in layer 3 */ }
-    for (const e of layers[3]) if (!(e instanceof Balloon)) e.draw(ctx, this);
-    for (const e of layers[3]) if (e instanceof Balloon) e.draw(ctx, this);
+    for (const e of layers[3]) if (!(e instanceof Balloon || e.rideable)) e.draw(ctx, this);
+    for (const e of layers[3]) if (e instanceof Balloon || e.rideable) e.draw(ctx, this);
     if (this.state !== 'win') { this.pickle.draw(ctx, this); this.player.draw(ctx, this); }
-    else { this.player.draw(ctx, this); this.pickle.draw(ctx, this); for (const e of layers[3]) if (e instanceof Balloon) drawBalloonFront(ctx, e); }
+    else { this.player.draw(ctx, this); this.pickle.draw(ctx, this); for (const e of layers[3]) if (e instanceof Balloon || e.rideable) drawBalloonFront(ctx, e); }
     for (const e of layers[4]) e.draw(ctx, this);
     for (const e of layers[5]) e.draw(ctx, this);
     // particles
@@ -389,6 +394,7 @@ const G = window.__G = {
     }
     ctx.globalAlpha = 1;
     drawDynamicTiles(ctx, this, cx, cy, true);
+    if (this.waters.length) drawWaters(ctx, this, true);
     if (this.flood) {
       const f = this.flood, t = this.time;
       ctx.fillStyle = 'rgba(222,150,40,0.5)'; ctx.beginPath(); ctx.moveTo(f.x0, f.y + 14);
@@ -410,6 +416,7 @@ const G = window.__G = {
   }
 };
 function drawBalloonFront(g, b) {
+  if (b.drawFront) return b.drawFront(g);
   // redraw basket over the riders
   g.save(); g.translate(b.cx, b.bottom);
   g.beginPath(); g.moveTo(-26, -34); g.lineTo(26, -34); g.lineTo(20, 0); g.lineTo(-20, 0); g.closePath(); fs(g, '#e8b46a', '#9a6a2a', 2.4);
@@ -465,9 +472,17 @@ const HUD = {
       if (G.gold[i]) drawGoldCherry(g, cx0 + 24 + i * 36, 35, G.time * 0.3);
       else { g.globalAlpha = 0.28; drawCherryPair(g, cx0 + 24 + i * 36, 33, '#9a8a7a'); g.globalAlpha = 1; }
     }
+    // boat parts (World 2)
+    if (G.def.boatParts) {
+      this.panel(g, cx0 + 10, 60, cw - 20, 30);
+      for (let i = 0; i < G.def.boatParts; i++) { g.globalAlpha = i < G.boatParts ? 1 : 0.3; drawBoatPart(g, cx0 + 34 + i * 26, 75, { i, t: 0 }); }
+      g.globalAlpha = 1;
+    }
     // power-ups
     const icons = [];
     if (p.glaze) icons.push('glaze');
+    if (p.helmet) icons.push('helmet');
+    if (p.armor) icons.push('armor');
     if (p.power) icons.push(p.power);
     if (p.star > 0) icons.push('star');
     const pw = 60 + icons.length * 40, px0 = W - pw - 10 - (Touch.visible ? 56 : 0);
@@ -561,6 +576,7 @@ const Scenes = {
     g.restore();
   },
   intro(g, G) {
+    if (UI.introWorld > 1 && typeof drawWorldIntro === 'function') return drawWorldIntro(g, G, UI.introWorld, UI.introIdx, this);
     const sc = UI.introIdx, t = G.stateT, W = G.viewW;
     const drawSky = (a, b) => { const gr = g.createLinearGradient(0, 0, 0, VIEW_H); gr.addColorStop(0, a); gr.addColorStop(1, b); g.fillStyle = gr; g.fillRect(0, 0, W, VIEW_H); };
     switch (sc) {
@@ -800,7 +816,7 @@ const UI = {
         </div>
         <p class="small">Лёгкий режим: больше спелости и жизней, а падение в пропасть не отнимает жизнь.</p>
         <p class="small">Подсказки и записки можно выключить при повторном прохождении: записки всё равно собираются, просто не открываются.</p>
-        <p class="small">Клавиши: ← → бег · ПРОБЕЛ/Z прыжок · ↓ подкат · X выстрел · C бросить Пикля · Esc пауза</p></div>`, 'dim');
+        <p class="small">Клавиши: ← → бег · ПРОБЕЛ/Z прыжок · ↓ подкат · X выстрел · C бросить Пикля (за Пикля — Хруст) · V смена героя · Esc пауза</p></div>`, 'dim');
       const f = this.focus;
       const step = v => { v = Math.round((v + 0.2) * 10) / 10; return v > 1.001 ? 0 : v; };
       this.el.querySelector('#s-mus').onclick = () => { s.music = step(s.music); Save.save(); Audio2.applyVolumes(); keep(0); };
@@ -821,7 +837,7 @@ const UI = {
     this.el.querySelector('#c-yes').onclick = yes; this.el.querySelector('#c-no').onclick = no; this.onBack = no;
   },
   intro() {
-    this.introIdx = 0; G.setState('intro'); this.under = null;
+    this.introIdx = 0; this.introWorld = 1; G.setState('intro'); this.under = null;
     const texts = [
       'Сплит-мир — огромный десерт банана-сплит. На одном его краю, в Бананьей Роще, живут весёлый банан Банни и его лучший друг — огурец Пикль.',
       'На другом краю, в Вафельном Домике, живёт печенька Крошка. Друзья собирались к ней на ежегодный Праздник Трёх Шариков.',
@@ -839,6 +855,19 @@ const UI = {
     const done = () => { Save.data.introSeen = true; Save.save(); this.map(undefined, 0); };
     render();
   },
+  // story screens shown the first time a world's map opens
+  worldIntro(w, done) {
+    let k = 0; this.introIdx = 0; this.introWorld = w.id; G.setState('intro'); this.under = null;
+    const finish = () => { Save.data.worldIntro = Object.assign({}, Save.data.worldIntro, { [w.id]: true }); Save.save(); done(); };
+    const render = () => {
+      const last = k >= w.intro.length - 1;
+      this.html('intro', `<div class="caption"><div class="lvl">${w.name}</div><p>${w.intro[k]}</p><div class="menu row"><button id="i-skip" class="ghost">Пропустить</button><button id="i-next">${last ? 'В путь! ▸' : 'Дальше ▸'}</button></div></div>`);
+      this.focus = 1; this.paint();
+      this.el.querySelector('#i-next').onclick = () => { if (!last) { k++; this.introIdx = k; G.stateT = 0; render(); } else finish(); };
+      this.el.querySelector('#i-skip').onclick = finish; this.onBack = finish;
+    };
+    render();
+  },
   setMap(i) {
     if (i === this.mapSel) return;
     this.mapSel = i; Audio2.play('select'); this.mapPanel();
@@ -849,6 +878,7 @@ const UI = {
   // show the map of the world that holds level `id`, with that level (or the one after it) selected
   mapAt(id, next) {
     const wi = WORLDS.indexOf(worldOfLevel(id)), w = WORLDS[wi], info = w.levels.find(l => l.id === id);
+    if (!info) return this.map(undefined, wi);
     this.map(next ? w.nextAfter(info) : w.levels.indexOf(info), wi);
   },
   switchWorld() {
@@ -864,6 +894,7 @@ const UI = {
     if (Save.data.world !== this.worldIdx) { Save.data.world = this.worldIdx; Save.save(); }
     const w = this.world();
     if (w.music === false) Audio2.silence(); else Audio2.music(1);
+    if (w.intro && !(Save.data.worldIntro || {})[w.id]) return this.worldIntro(w, () => this.map(sel, this.worldIdx));
     if (!ASSETS[w.map] && w.mapSrc) loadImage(w.map, w.mapSrc);
     this.mapSel = sel !== undefined ? clamp(sel, 0, w.levels.length - 1) : w.defaultSel();
     this.mapPanel();
@@ -927,7 +958,7 @@ const UI = {
       'Котёл Горечи лопнул и разлетелся разноцветным конфетти! А Барон Брюссель сел на пол и тихо сказал: «Меня никто никогда не выбирал на тарелку…»',
       'Банни протянул ему руку: «Пойдём с нами на Праздник Трёх Шариков! Там найдётся место для всех — даже для брюссельской капусты». Миша и Пикль закивали.',
       'В Вафельном Домике Крошка обняла Банни так крепко, что с неё посыпались крошки. Все спасённые друзья пустились в пляс, а Барон попробовал брюссельскую капусту в карамели — и удивился: «Ммм… да это же вкусно!»',
-      'Конец! Спасибо, что прошли весь путь через Сплит. Открыт бонусный уровень «Радужный Топпинг» — попробуй пробежать его быстрее всех!'
+      'Конец! Спасибо, что прошли весь путь через Сплит. Открыт бонусный уровень «Радужный Топпинг» и новый мир — Фруктовый Архипелаг! Переключиться можно кнопкой «⇄ Мир 2» на карте.'
     ];
     const render = () => {
       this.html('finale', `<div class="caption"><p>${texts[this.finIdx]}</p><div class="menu row"><button id="f-next">${this.finIdx < 3 ? 'Дальше ▸' : (fromGame ? 'Итоги ▸' : 'На карту ▸')}</button></div></div>`);
@@ -947,7 +978,7 @@ const UI = {
     this.onBack = () => G.resume();
   },
   note(text, done) {
-    this.html('note', `<div class="paper"><div class="ptitle">Записка в печеньке</div><p>${text}</p><div class="menu row"><button id="n-ok">Дальше ▸</button></div></div>`, 'dim');
+    this.html('note', `<div class="paper"><div class="ptitle">${G.theme && G.theme.world === 2 ? 'Письмо в бутылке' : 'Записка в печеньке'}</div><p>${text}</p><div class="menu row"><button id="n-ok">Дальше ▸</button></div></div>`, 'dim');
     const f = () => { this.hide(); done(); Input.clear(); };
     this.el.querySelector('#n-ok').onclick = f; this.onBack = f;
   },
@@ -993,6 +1024,8 @@ const UI = {
   ending() { this.finale(false); }
 };
 
+// is there something for the fire button to do right now?
+function fireAvailable(p) { return !!p && (((p.power === 'cherry' || p.power === 'mint') && p.char === 'banni') || p.power === 'flipper' || p.state === 'balloon'); }
 // ---------------- Touch controls ----------------
 const Touch = {
   el: document.getElementById('touch'), visible: false,
@@ -1056,7 +1089,7 @@ const Touch = {
     this.el.classList.toggle('on', want);
     if (!want) { if (this.release) this.release(); for (const k in Input.touch) Input.touch[k] = false; }
     const fire = this.el.querySelector('[data-act="fire"]');
-    if (fire) fire.style.visibility = (G.player && ((G.player.power === 'cherry' || G.player.power === 'mint') && G.player.char === 'banni' || G.player.state === 'balloon')) ? 'visible' : 'hidden';
+    if (fire) fire.style.visibility = fireAvailable(G.player) ? 'visible' : 'hidden';
     const sw = this.el.querySelector('[data-act="swap"]');
     if (sw) sw.style.display = (G.def && G.def.swap && G.level) ? 'flex' : 'none';
   }
@@ -1094,7 +1127,12 @@ function frame(now) {
   while (!G.manual && accT >= DT && n < 5) { Input.update(); try { G.step(DT); } catch (e) { reportError(e); } accT -= DT; n++; }
   if (n >= 5) accT = 0;
   try { G.render(); } catch (e) { reportError(e); }
-  if (G.state === 'play') { const f = G.player && ((G.player.power === 'cherry' || G.player.power === 'mint') && G.player.char === 'banni' || G.player.state === 'balloon'); if (f !== Touch.fireVis) { Touch.fireVis = f; Touch.update(); } }
+  if (G.state === 'play') {
+    const f = fireAvailable(G.player); if (f !== Touch.fireVis) { Touch.fireVis = f; Touch.update(); }
+    // the 🥒 button throws Pickle; while playing as Pickle it is his crunch
+    const crunch = G.player && G.player.char === 'pickle' && (Save.data.crunch || (G.def && G.def.crunch)), ic = crunch ? '💥' : '🥒';
+    if (ic !== Touch.pkIcon) { Touch.pkIcon = ic; const b = Touch.el.querySelector('[data-act="pickle"]'); if (b) b.textContent = ic; }
+  }
 }
 let errShown = 0;
 function reportError(e) { console.error(e); if (errShown++ < 1) { const d = document.getElementById('err'); d.textContent = 'Ошибка: ' + (e && e.message); d.style.display = 'block'; setTimeout(() => d.style.display = 'none', 6000); } }

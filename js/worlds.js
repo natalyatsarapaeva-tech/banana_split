@@ -40,6 +40,7 @@ const LINEAR = {
 };
 
 function worldCherries(w) { let n = 0; for (const l of w.levels) if (!l.bonus) n += (Save.data.cherries[l.id] || []).reduce((a, b) => a + b, 0); return n; }
-function worldOfLevel(id) { return WORLDS.find(w => w.levels.some(l => l.id === id)) || WORLDS[0]; }
-function levelInfo(id) { return worldOfLevel(id).levels.find(l => l.id === id); }
+function worldOfLevel(id) { return WORLDS.find(w => w.levels.some(l => l.id === id)) || WORLDS.find(w => w.id > 1 && String(id).startsWith(w.id + '-')) || WORLDS[0]; }
+// levels outside the map (e.g. the test level '2-dev') get a stand-in record
+function levelInfo(id) { return worldOfLevel(id).levels.find(l => l.id === id) || { id, num: String(id), name: LEVELS[id] ? '' : '?', notes: '\u0000' }; }
 function levelIds() { return WORLDS.flatMap(w => w.levels.filter(l => LEVELS[l.id]).map(l => l.id)); }

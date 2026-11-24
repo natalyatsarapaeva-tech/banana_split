@@ -1,8 +1,10 @@
 'use strict';
 // ================= world.js : tiles, level, physics, camera, terrain cache =================
 const TL = { EMPTY: 0, SOLID: 1, SR: 2, SL: 3, ICE: 4, ONEWAY: 5, CROWN: 6, CLOUD: 7, THORN: 8, FAKE: 9, SRI: 10, SLI: 11,
-  CHOC: 12, BROTH: 13, CRACK: 14, FUDGE: 16, CONVL: 17, CONVR: 18, GRATER: 19 };
-const SOLID_T = new Uint8Array(32); [1, 4, 14, 16, 17, 18, 19].forEach(t => SOLID_T[t] = 1);
+  CHOC: 12, BROTH: 13, CRACK: 14, FUDGE: 16, CONVL: 17, CONVR: 18, GRATER: 19,
+  WATER: 20, // marker returned by G.liquidAt for World 2 water bodies (never stored in the tile map)
+  RIND: 21 }; // fruit-rind wall: solid, broken by Pickle's crunch or a head-bump in a coconut helmet
+const SOLID_T = new Uint8Array(32); [1, 4, 14, 16, 17, 18, 19, 21].forEach(t => SOLID_T[t] = 1);
 const isSolidT = t => SOLID_T[t] === 1;
 const isLiquidT = t => t === 12 || t === 13;
 const isSlopeT = t => t === 2 || t === 3 || t === 10 || t === 11;

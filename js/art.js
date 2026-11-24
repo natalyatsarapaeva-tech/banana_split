@@ -240,6 +240,14 @@ function drawPickle(g, o) {
   const ah = o.pose === 'jump' || o.pose === 'cheer' ? -48 : o.pose === 'talk' ? -30 + Math.sin(t * 8) * 4 : -22;
   line(g, -11, -30, -16, ah + (run ? s * 4 : 0), '#2b5a1e', 2.4); circ(g, -16, ah + (run ? s * 4 : 0), 3); fs(g, '#5fa843', '#244d18', 1.2);
   line(g, 11, -30, 16, ah - (run ? s * 4 : 0), '#2b5a1e', 2.4); circ(g, 16, ah - (run ? s * 4 : 0), 3); fs(g, '#5fa843', '#244d18', 1.2);
+  // pirate bandana (World 2 look, see assets/w2/ref-*.jpg)
+  const band = o.bandana !== undefined ? o.bandana : !!(window.__G && __G.theme && __G.theme.world === 2);
+  if (band) {
+    g.save(); rrect(g, -12, -50, 24, 44, 12); g.clip(); rrect(g, -14, -49, 28, 7, 2); fs(g, '#e2363c'); line(g, -14, -43, 14, -43, '#a81e26', 1.4); g.restore();
+    const fl = Math.sin(t * 9) * 2;
+    g.beginPath(); g.moveTo(-11, -47); g.quadraticCurveTo(-18, -50 + fl, -22, -44 + fl); g.lineTo(-19, -42); g.quadraticCurveTo(-15, -45, -11, -44); g.closePath(); fs(g, '#e2363c', '#a81e26', 1.2);
+    g.beginPath(); g.moveTo(-11, -46); g.quadraticCurveTo(-17, -42 - fl, -19, -36 - fl); g.lineTo(-16, -36); g.quadraticCurveTo(-14, -41, -11, -44); g.closePath(); fs(g, '#d02a32', '#a81e26', 1.2);
+  }
   // face
   const blink = (t % 4.1) < 0.12;
   eye(g, -2, -38, 4, 5, 1, 0, { closed: blink, lid: '#4a9136' });
@@ -677,6 +685,7 @@ function drawPowerIcon(g, kind, x, y, t, sz) {
       for (const p of [[-8, -6, 8, '#f9b3d1'], [8, -6, 8, '#a9d8f5'], [0, -12, 9, '#ffd4e6'], [-3, -3, 7, '#d2b8f0']]) { circ(g, p[0], p[1], p[2]); fs(g, p[3]); }
       break;
     }
+    default: if (typeof drawPowerIconW2 === 'function') drawPowerIconW2(g, kind, t); break;
     case 'life': {
       g.scale(0.38, 0.38); g.translate(0, 40);
       drawBanniBody(g, { t: 0, hp: 3, pose: 'idle' });

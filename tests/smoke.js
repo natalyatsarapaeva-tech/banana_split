@@ -38,7 +38,7 @@ function serve() {
   await page.goto(url);
   await page.waitForFunction(() => window.__G && window.__G.state !== 'boot', null, { timeout: 15000 });
 
-  const ids = process.argv.slice(2).length ? process.argv.slice(2) : await page.evaluate(() => window.__dbg.levelIds());
+  const ids = process.argv.slice(2).length ? process.argv.slice(2) : await page.evaluate(() => window.__dbg.levelIds().concat(Object.keys(window.__dbg.LEVELS).filter(k => k.endsWith('-dev'))));
   let failed = 0;
   for (const id of ids) {
     const before = errors.length;
@@ -72,14 +72,16 @@ function serve() {
       const { UI, Save, WORLDS } = window.__dbg;
       if (wi > 0) Save.data.done[5] = 1;
       UI.map(undefined, wi);
-      return { world: UI.world().name, nodes: document.querySelectorAll('.node').length, levels: WORLDS[wi].levels.length };
+      let intro = 0; // the first visit to a world shows its story screens
+      while (document.querySelector('#scr-intro') && intro < 10) { document.querySelector('#i-next').click(); intro++; }
+      return { world: UI.world().name, intro, nodes: document.querySelectorAll('.node').length, levels: WORLDS[wi].levels.length };
     }, wi);
     await page.waitForTimeout(400);
     if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/map${wi + 1}.png` });
     const errs = errors.slice(before);
     const ok = errs.length === 0 && st.nodes === st.levels;
     if (!ok) failed++;
-    console.log(`${ok ? 'OK  ' : 'FAIL'} ${label} «${st.world}» узлов ${st.nodes}/${st.levels}` + (errs.length ? '\n     ' + errs.join('\n     ') : ''));
+    console.log(`${ok ? 'OK  ' : 'FAIL'} ${label} «${st.world}» узлов ${st.nodes}/${st.levels}${st.intro ? `, вступление ${st.intro} экр.` : ''}` + (errs.length ? '\n     ' + errs.join('\n     ') : ''));
   }
   if (missing.size) console.log('\nПока нет графики (не ошибка): ' + [...missing].join(', '));
   await browser.close(); srv.close();
