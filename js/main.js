@@ -896,6 +896,7 @@ const UI = {
     if (w.music === false) Audio2.silence(); else Audio2.music(1);
     if (w.intro && !(Save.data.worldIntro || {})[w.id]) return this.worldIntro(w, () => this.map(sel, this.worldIdx));
     if (!ASSETS[w.map] && w.mapSrc) loadImage(w.map, w.mapSrc);
+    for (const [k, src] of (w.assets || [])) if (ASSETS[k] === undefined) { ASSETS[k] = null; loadImage(k, src); }
     this.mapSel = sel !== undefined ? clamp(sel, 0, w.levels.length - 1) : w.defaultSel();
     this.mapPanel();
   },
