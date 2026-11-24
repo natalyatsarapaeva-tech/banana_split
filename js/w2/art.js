@@ -284,3 +284,104 @@ function drawWorldIntro(g, G, world, sc, S) {
     }
   }
 }
+
+// ---------- 2-2 Pineapple jungle (ref-jungle.jpg) ----------
+function drawPineSpring(g, x, y, w, o) { // pineapple on a metal coil; x,y = top-left of the pad, w = width
+  g.save(); g.translate(x + w / 2, y);
+  const sq = o.sq || 0, h = 26 - sq * 8;
+  for (let i = 0; i < 5; i++) { const yy = 22 + i * (h / 5) + sq * 4; ell(g, 0, yy, 13, 3.4); g.strokeStyle = i % 2 ? '#c8ccd4' : '#7a7e86'; g.lineWidth = 3; g.stroke(); }
+  rrect(g, -14, 46, 28, 5, 2); fs(g, '#5a5e66', '#2a2e36', 1.2);
+  g.translate(0, sq * 6);
+  ell(g, 0, 6, 17, 15); const gr = g.createLinearGradient(0, -8, 0, 20); gr.addColorStop(0, '#ffd84a'); gr.addColorStop(1, '#d89a1a'); fs(g, gr, '#8a5a10', 1.8);
+  g.save(); ell(g, 0, 6, 17, 15); g.clip(); g.strokeStyle = 'rgba(140,90,10,0.6)'; g.lineWidth = 1.3;
+  for (let i = -3; i <= 3; i++) { g.beginPath(); g.moveTo(i * 8 - 12, -10); g.lineTo(i * 8 + 12, 22); g.moveTo(i * 8 + 12, -10); g.lineTo(i * 8 - 12, 22); g.stroke(); }
+  g.restore();
+  for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + (i - 2) * 0.38; g.beginPath(); g.moveTo(-3, -6); g.lineTo(Math.cos(a) * 20, -6 + Math.sin(a) * 18); g.lineTo(3, -6); g.closePath(); fs(g, i % 2 ? '#3a9a3a' : '#4cb84a', '#1a5a1a', 1); }
+  g.restore();
+}
+function drawOlive(g, x, y, o) { // rolling olive with a red pimento; x,y = bottom center
+  g.save(); g.translate(x, y - 15);
+  g.save(); g.rotate(o.rot || 0);
+  ell(g, 0, 0, 16, 15); const gr = g.createRadialGradient(-5, -6, 2, 0, 0, 18); gr.addColorStop(0, '#9ac04a'); gr.addColorStop(1, '#4a6a1a'); fs(g, gr, '#26380a', 2);
+  circ(g, 9, -3, 4.5); fs(g, '#e2363c', '#8a1a1a', 1.2);
+  g.restore();
+  // eyes stay upright
+  for (const s of [-1, 1]) { ell(g, s * 5 - 2, -4, 3.6, 4.4); fs(g, '#fff', '#26380a', 1); circ(g, s * 5 - 1 + (o.dir || 0), -3.5, 1.7); fs(g, '#111'); }
+  line(g, -9, -10, -3, -8, '#26380a', 2); line(g, 1, -8, 7, -10, '#26380a', 2);
+  g.restore();
+}
+function drawShroom(g, x, y, o) { // pickled honey mushroom (опёнок): x,y = ground, up 0..1
+  const up = o.up === undefined ? 1 : o.up;
+  if (up <= 0.02) { ell(g, x, y - 2, 14, 4); fs(g, 'rgba(90,60,30,0.5)'); return; }
+  g.save(); g.translate(x, y); g.beginPath(); g.rect(-30, -70, 60, 70); g.clip(); g.translate(0, (1 - up) * 48);
+  rrect(g, -8, -26, 16, 26, 6); fs(g, '#f4ead8', '#8a7a60', 1.6);
+  for (const s of [-1, 1]) { ell(g, s * 4, -16, 2.6, 3.4); fs(g, '#fff', '#3a2a1a', 0.8); circ(g, s * 4, -15.5, 1.3); fs(g, '#111'); line(g, s * 1.5, -21, s * 7, -19, '#3a2a1a', 1.6); }
+  g.beginPath(); g.arc(0, -9, 3, Math.PI + 0.3, -0.3); g.strokeStyle = '#3a2a1a'; g.lineWidth = 1.5; g.stroke();
+  g.beginPath(); g.moveTo(-20, -24); g.quadraticCurveTo(-18, -46, 0, -46); g.quadraticCurveTo(18, -46, 20, -24); g.quadraticCurveTo(0, -30, -20, -24); g.closePath();
+  const gr = g.createLinearGradient(0, -46, 0, -24); gr.addColorStop(0, '#b05ac8'); gr.addColorStop(1, '#6a2a8a'); fs(g, gr, '#3a0a4a', 1.8);
+  for (const [sx, sy, r] of [[-9, -36, 3], [4, -40, 2.4], [10, -31, 2.2], [-2, -31, 1.8]]) { circ(g, sx, sy, r); fs(g, '#f0d8ff'); }
+  g.restore();
+}
+function drawJellyVine(g, ax, ay, ex, ey, sag) { // vine made of jelly beans
+  const cols = ['#e2363c', '#ffd447', '#6ad04a', '#4ab0ff', '#c38bff', '#ff8c5a'];
+  const n = Math.max(4, Math.round(Math.hypot(ex - ax, ey - ay) / 13));
+  const mx = ax + (ex - ax) * 0.5 + sag, my = ay + (ey - ay) * 0.5;
+  for (let i = 0; i <= n; i++) {
+    const k = i / n, x = (1 - k) * (1 - k) * ax + 2 * (1 - k) * k * mx + k * k * ex, y = (1 - k) * (1 - k) * ay + 2 * (1 - k) * k * my + k * k * ey;
+    const k2 = Math.min(1, k + 0.02), x2 = (1 - k2) * (1 - k2) * ax + 2 * (1 - k2) * k2 * mx + k2 * k2 * ex, y2 = (1 - k2) * (1 - k2) * ay + 2 * (1 - k2) * k2 * my + k2 * k2 * ey;
+    g.save(); g.translate(x, y); g.rotate(Math.atan2(y2 - y, x2 - x) + Math.PI / 2);
+    ell(g, 0, 0, 5, 8); fs(g, cols[i % cols.length], 'rgba(40,20,20,0.5)', 1.2); ell(g, -1.5, -3, 1.4, 2.4); fs(g, 'rgba(255,255,255,0.55)');
+    g.restore();
+  }
+  circ(g, ax, ay, 6); fs(g, '#3a7a2a', '#1a4a1a', 1.5);
+}
+function drawPupyrka(g, x, y, o) { // Pickle's little sister: pink bow, x,y = feet
+  g.save(); g.translate(x, y); g.scale((o.face || 1) * (o.s || 1), o.s || 1);
+  const t = o.t || 0, hop = o.happy ? Math.abs(Math.sin(t * 9)) * 6 : 0;
+  g.translate(0, -hop);
+  line(g, -4, -6, -5, 0, '#2b5a1e', 2.6); line(g, 4, -6, 5, 0, '#2b5a1e', 2.6);
+  rrect(g, -10, -40, 20, 36, 10); const gr = g.createLinearGradient(-10, 0, 10, 0); gr.addColorStop(0, '#4a9136'); gr.addColorStop(1, '#6ab84a'); fs(g, gr, '#244d18', 2);
+  for (const [bx, by] of [[-5, -32], [4, -26], [-6, -18], [5, -12]]) { circ(g, bx, by, 1.4); fs(g, '#a8dc8a'); }
+  const ah = o.happy || o.wave ? -38 + Math.sin(t * 10) * 3 : -18;
+  line(g, -9, -24, -14, ah, '#2b5a1e', 2.2); line(g, 9, -24, 14, ah, '#2b5a1e', 2.2);
+  for (const s of [-1, 1]) { ell(g, s * 4, -30, 3.4, 4.2); fs(g, '#fff', '#1d3a12', 1); circ(g, s * 4 + 0.6, -29.5, 1.7); fs(g, '#111'); line(g, s * 6.5, -34, s * 8, -36, '#1d3a12', 1.2); }
+  g.beginPath(); g.arc(0, -23, 3, 0.2, Math.PI - 0.2); g.strokeStyle = '#1d3a12'; g.lineWidth = 1.5; g.stroke();
+  ell(g, -6, -25, 2.4, 1.4); fs(g, 'rgba(255,140,170,0.6)'); ell(g, 6, -25, 2.4, 1.4); fs(g, 'rgba(255,140,170,0.6)');
+  g.save(); g.translate(4, -41); for (const s of [-1, 1]) { g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(s * 10, -9, s * 11, 2); g.closePath(); fs(g, '#ff6fa8', '#b0306a', 1.3); } circ(g, 0, 0, 3); fs(g, '#ff8ac0', '#b0306a', 1); g.restore();
+  g.restore();
+}
+function drawWoodCage(g, x, y, o) { // wooden pirate cage on a leafy log; x,y = bottom center
+  g.save(); g.translate(x, y);
+  if (o.broken) {
+    for (let i = 0; i < 6; i++) { g.save(); g.translate(-30 + i * 12, -4); g.rotate(i * 0.9); rrect(g, -12, -3, 24, 6, 2); fs(g, '#8a5a2a', '#4a2c10', 1.2); g.restore(); }
+    g.restore(); return;
+  }
+  if (o.inside) drawPupyrka(g, 0, -6, { t: o.t, wave: true });
+  for (let i = 0; i < 7; i++) { rrect(g, -38 + i * 12, -70, 6, 66, 2); fs(g, '#9a6a3a', '#4a2c10', 1.3); }
+  for (const yy of [-74, -8]) { rrect(g, -44, yy, 88, 9, 3); fs(g, '#7a4a1e', '#3a1e08', 1.6); }
+  for (const xx of [-42, 42]) { circ(g, xx, -70, 4); fs(g, '#5a3414'); circ(g, xx, -4, 4); fs(g, '#5a3414'); }
+  if (o.locked) { rrect(g, -8, -44, 16, 14, 3); fs(g, '#c8a040', '#6a4a10', 1.5); g.beginPath(); g.arc(0, -44, 5, Math.PI, 0); g.strokeStyle = '#6a4a10'; g.lineWidth = 2.5; g.stroke(); }
+  g.restore();
+}
+function drawPalisade(g, x, y, w, h) { // wooden stakes gate
+  for (let i = 0; i < 3; i++) {
+    const sx = x + 2 + i * 12;
+    g.beginPath(); g.moveTo(sx, y + h); g.lineTo(sx, y + 10); g.lineTo(sx + 5, y); g.lineTo(sx + 10, y + 10); g.lineTo(sx + 10, y + h); g.closePath(); fs(g, i % 2 ? '#a8743c' : '#8a5a2a', '#4a2c10', 1.4);
+  }
+  for (let j = 30; j < h; j += 70) { rrect(g, x - 2, y + j, w + 4, 7, 3); fs(g, '#5a3414'); }
+}
+function drawPineRindTile(g, x, y, c, r) { // pineapple-skin wall
+  g.fillStyle = '#d89a2a'; g.fillRect(x - 0.5, y - 0.5, T + 1, T + 1);
+  g.save(); g.beginPath(); g.rect(x, y, T, T); g.clip();
+  for (let i = -1; i <= 2; i++) for (let j = -1; j <= 2; j++) {
+    const cx = x + i * 20 + (j % 2 ? 10 : 0), cy = y + j * 14;
+    g.beginPath(); g.moveTo(cx, cy - 8); g.lineTo(cx + 10, cy); g.lineTo(cx, cy + 8); g.lineTo(cx - 10, cy); g.closePath(); fs(g, '#f2c040', '#8a5a10', 1.2);
+    circ(g, cx, cy, 1.6); fs(g, '#6a3a08');
+  }
+  g.restore();
+  g.strokeStyle = 'rgba(80,40,5,0.7)'; g.lineWidth = 1.6; g.strokeRect(x + 0.5, y + 0.5, T - 1, T - 1);
+}
+function drawW2Portrait(g, who) {
+  if (who === 'pupyrka') { drawPupyrka(g, 75, 150, { t: 0, s: 2.6, happy: false }); return true; }
+  return false;
+}

@@ -108,19 +108,20 @@ class UmbrellaCheckpoint extends Checkpoint {
 }
 // the watermelon boat at the end of a level: leaves once all boat parts are found
 class Boat extends Ent {
-  constructor(x, surfaceY, need) { super(x - 60, surfaceY - 30, 120, 40); this.layer = 3; this.rideable = true; this.need = need || 0; this.st = 'wait'; this.nagT = 0; this.vx = 0; }
+  constructor(x, surfaceY, need, o) { super(x - 60, surfaceY - 30, 120, 40); this.layer = 3; this.rideable = true; this.need = need || 0; this.o = o || {}; this.st = 'wait'; this.nagT = 0; this.vx = 0; }
   update(G, dt) {
     this.t += dt; this.nagT -= dt;
     const w = G.waters.find(q => this.cx >= q.x && this.cx <= q.x + q.w); if (w) this.y = w.surfaceY(G.time) - 30 + Math.sin(this.t * 2) * 2;
     if (this.st === 'wait') {
       const p = G.player;
       if (p.state === 'play' && overlap({ x: this.x, y: this.y - 40, w: this.w, h: this.h + 40 }, p)) {
-        if (G.boatParts >= this.need) { this.st = 'go'; G.levelComplete(this); }
+        if (this.o.cond && !this.o.cond(G)) { if (this.nagT <= 0) { this.nagT = 4; G.pickle.speak(this.o.wait, 4, true); } }
+        else if (G.boatParts >= this.need) { this.st = 'go'; G.levelComplete(this); }
         else if (this.nagT <= 0) { this.nagT = 4; G.pickle.speak(`Лодка ещё не готова: частей ${G.boatParts} из ${this.need}. Они где-то на пляже!`, 4, true); }
       }
     } else if (this.st === 'go' && G.stateT > 0.8) { this.vx = Math.min(240, this.vx + 160 * dt); this.x += this.vx * dt; }
   }
-  draw(g, G) { drawBoat(g, this.cx, this.bottom, { t: this.t, parts: Math.min(G.boatParts, this.need), need: this.need, sail: this.st === 'go' || (this.need && G.boatParts >= this.need) }); }
+  draw(g, G) { drawBoat(g, this.cx, this.bottom, { t: this.t, parts: Math.min(G.boatParts, this.need), need: this.need, sail: this.st === 'go' || G.boatParts >= this.need }); }
   drawFront(g) { drawBoatFront(g, this.cx, this.bottom); }
 }
 
@@ -151,3 +152,107 @@ Pickup.prototype.drawW2 = function (g) {
     for (const e of G.ents) if (e.alive && e.enemy && !e.boss && e.harmful && e.frozen <= 0 && e.shootable !== false && overlap(this, e)) { e.kill(G, 'armor'); Audio2.play('crunch'); }
   };
 })();
+
+// ---------- 2-2 Pineapple jungle ----------
+// pineapple on a metal spring: bounces high, higher when jump is held
+class PineSpring extends JellyPad {
+  constructor(x, groundY) { super(x - 20, groundY - 50, 40, null, 900); }
+  bounce(G, p, impact) {
+    const v = clamp(Math.max(this.min, impact * 1.05), this.min, 1250) * (Input.held('jump') ? 1.08 : 1);
+    p.vy = -v; p.onGround = false; p.standOn = null; p.cutOk = false; p.airJumps = 1; p.sx = 0.75; p.sy = 1.3;
+    this.sq = 1; Audio2.play('boing'); G.hint('pinespring', `Ананас на пружине! Держи ${Input.label('jump')} — подбросит ещё выше.`);
+  }
+  draw(g) { drawPineSpring(g, this.x, this.y, this.w, { sq: Math.sin(this.sq * 10) * this.sq * 0.5 + this.sq * 0.5 }); }
+}
+// rolling olive: too slippery to stomp — jump over it, slide into it, shoot it or crunch it
+class Olive extends ScoopBall {
+  constructor(x, y, dir, o) { super(x, y, dir); o = o || {}; this.patrol = !!o.patrol; this.stompable = false; this.speed = o.speed || 120; if (this.patrol) { this.vx = dir * this.speed; this.life = 1e9; } }
+  update(G, dt) {
+    if (!this.patrol) return super.update(G, dt);
+    if (!this.pre(G, dt)) return;
+    this.walkerMove(G, dt, this.speed); this.rot += this.vx / 16 * dt;
+  }
+  onTouch(G, p) { if (p.vy > 0 && p.prevBottom <= this.y + 10) G.hint('olive', 'Оливку не растопчешь — она скользкая! Перепрыгни её, подкатись или сделай Хруст.'); return false; }
+  splat(G) { this.alive = false; G.burst(this.cx, this.cy, 10, ['#7a9a3a', '#e2363c', '#ffffff']); Audio2.play('pop'); }
+  draw(g) { drawOlive(g, this.cx, this.bottom + 1, { rot: this.rot, dir: sign(this.vx) }); this.drawIce(g); }
+}
+class OliveSpawner extends BallSpawner {
+  update(G, dt) {
+    const p = G.player;
+    if (Math.abs(p.cx - this.x) > 950 || p.state !== 'play') return;
+    this.timer -= dt;
+    if (this.timer <= 0) { this.timer = this.period; G.add(new Olive(this.x, this.y, this.dir)); }
+  }
+}
+// pickled honey mushroom: hides in the moss and pops up when the hero comes near
+class Shroom extends Broccoli {
+  draw(g) { drawShroom(g, this.cx, this.base, { up: this.up }); this.drawIce(g); }
+}
+class JellyVine extends Vine {
+  draw(g) {
+    const ex = this.ax + Math.sin(this.ang) * this.len, ey = this.ay + Math.cos(this.ang) * this.len;
+    drawJellyVine(g, this.ax, this.ay, ex, ey, this.holder ? 0 : Math.sin(this.t * 2 + this.ph) * 6);
+  }
+}
+class PalisadeGate extends Gate {
+  draw(g) { if (this.k <= 0.01) return; const h = this.h * this.k; drawPalisade(g, this.x, this.y + this.h - h, this.w, h); }
+}
+// pirate camp: gates shut, waves of olives and mushrooms, then the cage can be opened
+class CampFight extends Ent {
+  constructor(x, o) { super(x, -1000, 4, 4000); this.o = o; this.st = 'wait'; this.wave = -1; this.spawned = []; this.pause = 0; }
+  begin(G) {
+    this.st = 'fight'; this.wave = -1; this.pause = 0.6;
+    for (const gt of this.o.gates) gt.close();
+    G.pickle.speak('Пираты охраняют клетку! Прогоним их — тогда я разобью замок.', 4, true);
+  }
+  reset(G) {
+    this.st = 'wait'; for (const e of this.spawned) e.alive = false; this.spawned = [];
+    for (const gt of this.o.gates) { gt.closed = false; gt.solid = null; gt.k = 0; }
+  }
+  update(G, dt) {
+    const p = G.player;
+    if (this.st === 'wait') { if (p.state === 'play' && p.cx > this.x) this.begin(G); return; }
+    if (this.st !== 'fight') return;
+    if (p.state === 'dead' || p.state === 'gone') { this.reset(G); return; }
+    if (this.spawned.some(e => e.alive)) return;
+    this.pause -= dt; if (this.pause > 0) return;
+    this.wave++;
+    const waves = this.o.waves;
+    if (this.wave >= waves.length) {
+      this.st = 'done'; for (const gt of this.o.gates) gt.open();
+      this.o.cage.unlock(G); return;
+    }
+    const a = this.o.arena; this.spawned = [];
+    waves[this.wave].forEach((kind, i) => {
+      if (kind === 'olive') { const left = i % 2 === 0; this.spawned.push(G.add(new Olive(left ? a.x0 + 30 : a.x1 - 30, a.floor - 200, left ? 1 : -1, { patrol: true, speed: 110 + this.wave * 15 }))); }
+      else { const x = a.x0 + 80 + (i * 173 + this.wave * 97) % (a.x1 - a.x0 - 160); const s = G.add(new Shroom(x, a.floor)); s.active = true; this.spawned.push(s); }
+    });
+    for (const e of this.spawned) { e.active = true; G.burst(e.cx, e.cy, 8, ['#ffffff', '#9cd47a']); }
+    G.toast(`Волна ${this.wave + 1} из ${waves.length}`);
+    this.pause = 1;
+  }
+}
+// the wooden cage with Pickle's sister
+class PupyrkaCage extends Ent {
+  constructor(x, y, lines) { super(x - 44, y - 76, 88, 76); this.fx = x; this.fy = y; this.layer = 0; this.crunchable = true; this.poundable = true; this.locked = true; this.broken = false; this.lines = lines; this.nagT = 0; }
+  unlock(G) { this.locked = false; Audio2.play('gate'); G.pickle.speak(`Пираты разбежались! Теперь Хрустом по клетке — ${Input.label('pickle')}!`, 5, true); }
+  update(G, dt) { this.t += dt; this.nagT -= dt; }
+  onPound(G, p) { this.onCrunch(G, p); }
+  onCrunch(G) {
+    if (this.broken) return;
+    if (this.locked) { if (this.nagT <= 0) { this.nagT = 3; Audio2.play('bump'); G.pickle.speak('Замок не поддаётся, пока пираты рядом!', 3, true); } return; }
+    this.broken = true; this.crunchable = this.poundable = false; Audio2.play('break'); G.shake(0.25);
+    G.burst(this.fx, this.fy - 40, 24, ['#8a5a2a', '#c8904a', '#ff6fa8', '#ffffff']);
+    const sis = G.add(new FreedSister(this.fx, this.fy));
+    G.later(0.6, () => G.dialog(this.lines, () => {
+      Save.data.family = Object.assign({}, Save.data.family, { pupyrka: true }); Save.save();
+      sis.go = true; G.sisterFree = true; G.pickle.speak('Скорее к лодке! Плывём на Арбузный риф!', 4, true);
+    }));
+  }
+  draw(g) { drawWoodCage(g, this.fx, this.fy, { t: this.t, broken: this.broken, inside: !this.broken, locked: this.locked }); }
+}
+class FreedSister extends Ent {
+  constructor(x, y) { super(x - 10, y - 40, 20, 40); this.fx = x; this.fy = y; this.layer = 0; this.go = false; this.face = 1; }
+  update(G, dt) { this.t += dt; if (this.go) { this.fx += 230 * dt; if (this.t > 30 || this.fx > G.level.W * T) this.alive = false; } }
+  draw(g) { drawPupyrka(g, this.fx, this.fy, { t: this.t, happy: true, face: this.face }); }
+}

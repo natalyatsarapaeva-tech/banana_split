@@ -72,3 +72,83 @@ const THEME_W2_1 = baseTheme({
     return false;
   }
 });
+
+// ---------- 2-2: Pineapple jungle ----------
+function jungleBackground(th, ctx, G, camX, camY) {
+  const W = G.viewW, t = G.time;
+  if (th.bgKey && ASSETS[th.bgKey] === undefined && !th._bgReq) { th._bgReq = true; loadImage(th.bgKey, th.bgSrc).then(im => { if (!im) ASSETS[th.bgKey] = null; }); }
+  const sky = ctx.createLinearGradient(0, 0, 0, VIEW_H); sky.addColorStop(0, '#2e6a2a'); sky.addColorStop(1, '#8ac860');
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, VIEW_H);
+  const img = th.bgKey && ASSETS[th.bgKey];
+  if (img) { parallaxImage(ctx, img, camX, 0.1, -20 - camY * 0.08, VIEW_H * 1.1, W); return; }
+  const wrap = (x, m) => ((x % m) + m) % m;
+  // light rays
+  ctx.save(); ctx.globalAlpha = 0.1; ctx.fillStyle = '#fff6c0';
+  for (let i = 0; i < 5; i++) { const x = wrap(i * 260 - camX * 0.03, W + 300) - 150; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 60, 0); ctx.lineTo(x + 200, VIEW_H); ctx.lineTo(x + 110, VIEW_H); ctx.closePath(); ctx.fill(); }
+  ctx.restore();
+  // far giant pineapples
+  for (let layer = 0; layer < 2; layer++) {
+    const p = layer ? 0.18 : 0.08, sc = layer ? 1 : 0.7, col = layer ? '#5a8a2a' : '#4a7a2a', step = layer ? 420 : 330;
+    for (let i = -1; i < W / step + 2; i++) {
+      const x = i * step + wrap(-camX * p, step), base = VIEW_H - 40 - camY * p * 0.4 + layer * 30;
+      ctx.save(); ctx.translate(x, base); ctx.scale(sc, sc);
+      ctx.fillStyle = layer ? '#c8a03a' : '#9a8a3a'; ctx.globalAlpha = layer ? 0.55 : 0.4;
+      ctx.beginPath(); ctx.ellipse(0, -110, 70, 100, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = col; for (let k = 0; k < 5; k++) { const a = -Math.PI / 2 + (k - 2) * 0.35; ctx.beginPath(); ctx.moveTo(-10, -200); ctx.lineTo(Math.cos(a) * 90, -200 + Math.sin(a) * 110); ctx.lineTo(10, -200); ctx.closePath(); ctx.fill(); }
+      ctx.restore();
+    }
+  }
+  ctx.globalAlpha = 1;
+  // hanging leaves at the top
+  for (let i = -1; i < W / 90 + 2; i++) {
+    const x = i * 90 + wrap(-camX * 0.3, 90), h = 40 + hash2(i + Math.floor(camX * 0.3 / 90), 7) * 50;
+    ctx.fillStyle = i % 2 ? '#2a5a22' : '#356a2a'; ctx.beginPath(); ctx.ellipse(x, h * 0.4 - 20 - camY * 0.05, 34, h, 0, 0, TAU); ctx.fill();
+  }
+}
+const THEME_W2_2 = baseTheme({
+  id: 'w2-2', world: 2, rim: 'rgba(30,20,5,0.3)', topEdge: '#2a6a1e', drips: false,
+  bgKey: 'w2bg2', bgSrc: 'assets/w2/bg2.jpg',
+  waterCol: ['#4ac0a8', '#1a5a5a'], waterTint: 'rgba(40,150,120,0.18)',
+  breakColors: ['#f2c040', '#d89a2a', '#6a3a08'], fallColors: ['#9cd47a', '#4a8a2a', '#ffffff'],
+  bodyColor(c, r, d) { return d <= 0 ? '#6a5430' : d <= 2 ? '#5a4626' : '#4a3a1e'; },
+  bodyDetail(g, c, r, d, x, y) {
+    for (let i = 0; i < 3; i++) { const h = hash2(c * 7 + i, r * 3); g.fillStyle = h < 0.5 ? 'rgba(30,20,5,0.35)' : 'rgba(160,130,80,0.35)'; g.fillRect(x + 4 + hash2(c + i, r) * 30, y + 4 + hash2(c, r + i) * 30, 3, 3); }
+    if (hash2(c, r * 13) < 0.15) { g.strokeStyle = 'rgba(120,90,40,0.6)'; g.lineWidth = 2; g.beginPath(); g.moveTo(x + 6, y + 8); g.quadraticCurveTo(x + 20, y + 22, x + 34, y + 16); g.stroke(); }
+  },
+  top(c) { return hash2(c, 3) < 0.5 ? '#4caf3a' : '#45a336'; },
+  surfaceBits(g, c, r, at) { // moss with leaves and passion-fruit flowers
+    for (let i = 0; i < 4; i++) { const p = at((i + 0.5) / 4); g.save(); g.translate(p.x, p.y - 1); g.rotate(-0.6 + hash2(c + i, r) * 1.2); g.beginPath(); g.ellipse(0, -4, 3.5, 8, 0, 0, TAU); g.fillStyle = i % 2 ? '#3a9a2a' : '#5ac042'; g.fill(); g.restore(); }
+    if (hash2(c, r * 5) < 0.12) { const p = at(0.5); g.save(); g.translate(p.x, p.y - 2); for (let k = 0; k < 5; k++) { g.rotate(TAU / 5); g.beginPath(); g.ellipse(0, -5, 2.6, 5, 0, 0, TAU); g.fillStyle = '#b05ac8'; g.fill(); } circ(g, 0, 0, 3); fs(g, '#ffd447'); g.restore(); }
+  },
+  plank(g, x, y, w) { // mossy branch
+    rrect(g, x - 2, y, w + 4, 12, 6); fs(g, '#7a5a2a', '#3a2a10', 1.6);
+    g.fillStyle = '#4caf3a'; for (let i = 0; i < w; i += 14) { g.beginPath(); g.ellipse(x + i + 6, y + 1, 7, 3.5, 0, 0, TAU); g.fill(); }
+    for (let i = 20; i < w; i += 40) { line(g, x + i, y + 6, x + i + 10, y + 7, 'rgba(40,25,5,0.5)', 1.4); }
+  },
+  special(g, L, c, r, t) { if (t === TL.RIND) { drawPineRindTile(g, c * T, r * T, c, r); return true; } return false; },
+  specialTop(g, L, c, r, t) { return t === TL.RIND; },
+  drawBackground(ctx, G, camX, camY) { jungleBackground(this, ctx, G, camX, camY); },
+  decoX(g, d, G) {
+    if (d.k === 'bigpine') { // giant pineapple (the island landmark)
+      g.save(); g.translate(d.x, d.y); const s = d.s || 1; g.scale(s, s);
+      ell(g, 0, -90, 62, 90); const gr = g.createLinearGradient(-60, 0, 60, 0); gr.addColorStop(0, '#c88a1a'); gr.addColorStop(0.5, '#ffd84a'); gr.addColorStop(1, '#b8781a'); fs(g, gr, '#6a4a08', 2.5);
+      g.save(); ell(g, 0, -90, 62, 90); g.clip(); g.strokeStyle = 'rgba(120,70,5,0.55)'; g.lineWidth = 2;
+      for (let i = -6; i <= 6; i++) { g.beginPath(); g.moveTo(i * 22 - 80, -190); g.lineTo(i * 22 + 80, 10); g.moveTo(i * 22 + 80, -190); g.lineTo(i * 22 - 80, 10); g.stroke(); }
+      g.restore();
+      for (let k = 0; k < 7; k++) { const a = -Math.PI / 2 + (k - 3) * 0.3; g.beginPath(); g.moveTo(-12, -176); g.lineTo(Math.cos(a) * 80, -176 + Math.sin(a) * 100); g.lineTo(12, -176); g.closePath(); fs(g, k % 2 ? '#3a9a3a' : '#2e8030', '#1a4a1a', 1.5); }
+      g.restore(); return true;
+    }
+    if (d.k === 'fern') { g.save(); g.translate(d.x, d.y); const s = d.s || 1; g.scale(s, s); for (let k = 0; k < 7; k++) { const a = -Math.PI / 2 + (k - 3) * 0.32; g.save(); g.rotate(a + Math.PI / 2); g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(-14, -40, 0, -70); g.quadraticCurveTo(14, -40, 0, 0); g.closePath(); fs(g, k % 2 ? '#3a9a2a' : '#4cb83a', '#1a5a1a', 1.2); g.restore(); } g.restore(); return true; }
+    if (d.k === 'flower') { g.save(); g.translate(d.x, d.y); for (let k = 0; k < 6; k++) { g.rotate(TAU / 6); g.beginPath(); g.ellipse(0, -10, 5, 10, 0, 0, TAU); fs(g, '#b05ac8', '#6a2a8a', 1); } circ(g, 0, 0, 7); fs(g, '#f2c040', '#8a5a10', 1); g.restore(); return true; }
+    if (d.k === 'tent') { // pirate tent in the camp
+      g.save(); g.translate(d.x, d.y);
+      g.beginPath(); g.moveTo(-70, 0); g.lineTo(0, -110); g.lineTo(70, 0); g.closePath(); fs(g, '#e8dcc0', '#8a7a5a', 2);
+      g.save(); g.clip(); for (let i = -4; i <= 4; i++) { g.fillStyle = i % 2 ? '#e2363c' : '#e8dcc0'; g.fillRect(i * 18, -120, 9, 130); } g.restore();
+      g.beginPath(); g.moveTo(-14, 0); g.lineTo(0, -50); g.lineTo(14, 0); g.closePath(); fs(g, '#3a2a1a');
+      line(g, 0, -110, 0, -150, '#5a3414', 3); g.beginPath(); g.moveTo(0, -150); g.lineTo(30, -142); g.lineTo(0, -132); g.closePath(); fs(g, '#1a1a1a');
+      g.restore(); return true;
+    }
+    if (d.k === 'sign') return false;
+    return THEME_W2_1.decoX(g, d, G);
+  }
+});

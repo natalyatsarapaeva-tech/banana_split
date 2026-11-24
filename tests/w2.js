@@ -9,14 +9,18 @@ function check(name, ok, info) { results.push(ok); console.log(`${ok ? 'OK  ' : 
 (async () => {
   const h = await open({ shots: process.argv[2] || '.' });
   const shot = async n => { if (process.argv[2]) await h.shot(n); };
-  const fresh = async () => { await h.start('2-1'); await h.eval(() => { window.__dbg.Save.data.settings.hints = false; }); await h.step(0.2); };
+  const fresh = async () => { await h.eval(() => { delete window.__dbg.Save.data.cherries['2-1']; }); await h.start('2-1'); await h.eval(() => { window.__dbg.Save.data.settings.hints = false; }); await h.step(0.2); };
   // jump from (x, y) to the right: run, jump, double-jump; returns where the hero lands
-  const hop = async (x, y, { dbl = 0.3, hold = 0.25 } = {}) => {
+  const hop = async (x, y, { dbl = 0.3, hold = 0.25, stopAt = Infinity } = {}) => {
     await h.put(x, y); await h.step(0.15);
     await h.step(hold, ['ArrowRight', 'Space']);
-    await h.step(Math.max(0, dbl - hold), ['ArrowRight']);
-    await h.step(0.25, ['ArrowRight', 'Space']);
-    for (let i = 0; i < 120; i++) { await h.step(1 / 60, ['ArrowRight']); const s = await h.state(); if (s.ground && !s.wet) return s; if (s.wet) return s; }
+    await h.step(Math.max(0, (dbl || 0) - hold), ['ArrowRight']);
+    if (dbl !== false) await h.step(0.25, ['ArrowRight', 'Space']);
+    for (let i = 0; i < 120; i++) {
+      const s0 = await h.state();
+      await h.step(1 / 60, s0.x < stopAt ? ['ArrowRight'] : s0.x > stopAt + 20 ? ['ArrowLeft'] : []);
+      const s = await h.state(); if (s.ground && !s.wet) return s; if (s.wet) return s;
+    }
     return h.state();
   };
 
@@ -31,7 +35,10 @@ function check(name, ok, info) { results.push(ok); console.log(`${ok ? 'OK  ' : 
   s = await h.state();
   check('Пикль стоит на дне под водой', s.wet && s.ground && s.under, JSON.stringify({ y: s.y }));
   await h.put(X(45), Y(G + 3)); await h.step(0.2);
-  await h.step(0.3, ['ArrowRight', 'Space']); await h.step(0.25, ['ArrowRight']); await h.step(0.15, ['ArrowRight', 'Space']); await h.step(0.8, ['ArrowRight']);
+  // a player taps jump: one push off the floor, then the kick when the head reaches the surface
+  const dir = async () => ((await h.state()).x < X(48) ? ['ArrowRight'] : (await h.state()).x > X(49) ? ['ArrowLeft'] : []);
+  for (let i = 0; i < 8; i++) { await h.step(0.1, (await dir()).concat(['Space'])); await h.step(0.08, await dir()); }
+  for (let i = 0; i < 6; i++) await h.step(0.1, await dir());
   s = await h.state();
   check('Пикль выпрыгивает из воды на скалу', !s.wet && s.y <= Y(G - 1) + 2, JSON.stringify({ x: s.x, y: s.y }));
 
@@ -102,6 +109,108 @@ function check(name, ok, info) { results.push(ok); console.log(`${ok ? 'OK  ' : 
   s = await h.state();
   const saved = await h.eval(() => !!window.__dbg.Save.data.done['2-1']);
   check('уровень засчитан пройденным', s.st === 'results' && saved);
+
+  // ================= 2-2 Pineapple jungle =================
+  {
+    const G2 = 24, Gc = 12, X2 = X, Y2 = Y;
+    const fresh2 = async () => { await h.eval(() => { delete window.__dbg.Save.data.cherries['2-2']; }); await h.start('2-2'); await h.eval(() => { window.__dbg.Save.data.settings.hints = false; window.__dbg.Save.data.crunch = true; }); await h.step(0.2); };
+    const noEnemies = () => h.eval(() => { for (const e of window.__G.ents) if (e.enemy) e.alive = false; for (const e of window.__G.ents) if (e.constructor.name === 'OliveSpawner') e.alive = false; });
+    await fresh2();
+    s = await h.state();
+    check('2-2: начинаем за Пикля', s.char === 'pickle');
+    await shot('w22-start');
+
+    // olives can't be stomped
+    await h.eval(() => { const G = window.__G; for (const e of G.ents) if (e.enemy) e.alive = false; });
+    await h.eval(() => { const G = window.__G; const o = new Olive(6 * 40 + 20, 24 * 40, 1, { patrol: true, speed: 0.001 }); o.active = true; G.add(o); });
+    await h.step(0.3);
+    await h.put(X2(6), Y2(G2) - 160); await h.step(1.2);
+    s = await h.state();
+    check('2-2: оливку нельзя растоптать (прыжок на неё ранит)', s.hp === 2, `hp=${s.hp}`);
+
+    // jelly-bean vines can be grabbed; the first cherry is reached from a vine branch
+    await fresh2(); await noEnemies(); await h.eval(() => { const G = window.__G; G.player.setChar(G, 'banni'); });
+    await h.eval(() => { const v = window.__G.ents.find(e => e.constructor.name === 'JellyVine' && Math.abs(e.ax - (55 * 40 + 20)) < 2); v.ph = 0; v.t = 0; v.ang = 0; });
+    await h.put(X2(55), Y2(G2 - 9) + 210); await h.eval(() => { window.__G.player.vy = -150; window.__G.player.onGround = false; });
+    let grabbed = false; for (let i = 0; i < 40 && !grabbed; i++) { await h.step(1 / 60); grabbed = await h.eval(() => window.__G.player.state === 'vine'); }
+    check('2-2: за лиану из мармеладок можно схватиться', grabbed);
+    await shot('w22-vine');
+    await fresh2(); await noEnemies(); await h.eval(() => { const G = window.__G; G.player.setChar(G, 'banni'); });
+    const br = await hop(X2(62) + 12, Y2(G2 - 10), { dbl: false, stopAt: X2(65) });
+    check('2-2: с ветки у лианы — на доску с первой вишенкой', br.gold[0] === '1', `y=${br.y} gold=${br.gold}`);
+
+    // the climb to the camp works for Pickle: ground → plank → spring → planks → plateau
+    await fresh2(); await noEnemies();
+    const climb = [[122, G2, 124, G2 - 4], [127, G2 - 4, 132, G2 - 8], [135, G2 - 8, 138, G2 - 10], [140, G2 - 10, 145, Gc]];
+    for (const [from, top, to, toTop] of climb) {
+      const r = await hop(X2(from) + 12, Y2(top), { dbl: 0.45, stopAt: X2(to + 1) });
+      check(`2-2: Пикль поднимается к лагерю (${from} → ${to})`, !r.wet && r.x >= to * T - 4 && r.y === Y2(toTop), `x=${r.x} y=${r.y}, нужно y=${Y2(toTop)}`);
+    }
+
+    // rind pocket with a cherry in the pineapple wall
+    await fresh2(); await noEnemies();
+    await h.put(X2(142), Y2(G2)); await h.step(0.2); await h.step(0.05, ['KeyC']); await h.step(0.4); await h.step(0.6, ['ArrowRight']);
+    s = await h.state();
+    check('2-2: Хруст открывает тайник в ананасовой стене', s.gold[1] === '1', s.gold);
+
+    // the third cherry above the plateau spring: only with the jump held
+    let top = 1e9;
+    const springTry = async held => {
+      top = 1e9;
+      await fresh2(); await noEnemies(); await h.eval(() => { const G = window.__G; G.player.setChar(G, 'banni'); });
+      await h.put(X2(152) + 10, Y2(Gc)); await h.step(0.2);
+      // jump from the ground onto the pineapple; keep the button held (or let go) through the bounce
+      await h.step(0.2, ['Space', 'ArrowRight']);
+      let bounced = false, prevVy = 0;
+      for (let i = 0; i < 180; i++) {
+        const st = await h.eval(() => [window.__G.player.vy, window.__G.player.cx, window.__G.player.y]); top = Math.min(top, st[2]);
+        if (prevVy > 0 && st[0] < -500) bounced = true;
+        prevVy = st[0];
+        if (bounced && st[0] > -40) { // double jump at the apex, steering under the cherry like a player would
+          await h.step(0.05, []);
+          for (let k = 0; k < 25; k++) { const [cx, y] = await h.eval(() => [window.__G.player.cx, window.__G.player.y]); top = Math.min(top, y); await h.step(1 / 60, ['Space'].concat(cx < X2(154) - 3 ? ['ArrowRight'] : cx > X2(154) + 3 ? ['ArrowLeft'] : [])); }
+          break;
+        }
+        await h.step(1 / 60, (held ? ['Space'] : []).concat(st[1] < X2(154) - 4 ? ['ArrowRight'] : st[1] > X2(154) + 4 ? ['ArrowLeft'] : []));
+      }
+      await h.step(0.5);
+      if (process.env.DBG) console.log('  spring', held, 'top', Math.round(top));
+      return (await h.state()).gold[2] === '1';
+    };
+    const heldOk = await springTry(true), freeOk = await springTry(false);
+    check('2-2: вишенка над пружиной достаётся с зажатым прыжком и не достаётся без него', heldOk && !freeOk, `зажат: ${heldOk}, без: ${freeOk}`);
+
+    // the camp: gates close, waves, cage, dialog, boat
+    await fresh2(); await noEnemies();
+    await h.put(X2(160), Y2(Gc)); await h.step(0.2);
+    await h.step(0.3, ['ArrowRight']);
+    await h.step(1.0, ['ArrowRight']);
+    let camp = await h.eval(() => { const c = window.__G.ents.find(e => e.constructor.name === 'CampFight'); return { st: c.st, gates: c.o.gates.map(g => g.closed) }; });
+    check('2-2: в лагере закрываются ворота и начинается бой', camp.st === 'fight' && camp.gates.every(Boolean), JSON.stringify(camp));
+    // the boat refuses to leave without Pupyrka
+    for (let wave = 0; wave < 4; wave++) {
+      await h.eval(() => { const c = window.__G.ents.find(e => e.constructor.name === 'CampFight'); for (const e of c.spawned) if (e.alive) e.kill(window.__G, 'test'); });
+      await h.step(1.3);
+    }
+    camp = await h.eval(() => { const c = window.__G.ents.find(e => e.constructor.name === 'CampFight'); const cg = window.__G.ents.find(e => e.constructor.name === 'PupyrkaCage'); return { st: c.st, wave: c.wave, gates: c.o.gates.map(g => g.closed), locked: cg.locked }; });
+    check('2-2: после трёх волн ворота открыты, клетка отперта', camp.st === 'done' && !camp.locked && camp.gates.every(g => !g), JSON.stringify(camp));
+    await shot('w22-camp');
+    await h.put(X2(186), Y2(Gc)); await h.eval(() => { window.__G.player.face = 1; }); await h.step(0.2); await h.step(0.05, ['KeyC']); await h.step(1.0);
+    const dlg = await h.eval(() => !!document.querySelector('#scr-dialog'));
+    await shot('w22-dialog');
+    for (let i = 0; i < 8; i++) await h.eval(() => { const b = document.querySelector('#d-next'); if (b) b.click(); });
+    await h.step(0.3);
+    const free = await h.eval(() => !!window.__G.sisterFree && !!window.__dbg.Save.data.family.pupyrka);
+    check('2-2: Хруст ломает клетку, диалог с Пупыркой, она спасена', dlg && free, `диалог: ${dlg}, спасена: ${free}`);
+    await h.put(X2(200), Y2(Gc)); await h.step(0.2); await h.step(1.0, ['ArrowRight']); await h.step(0.5);
+    s = await h.state();
+    check('2-2: лодка увозит героев дальше', s.st === 'win');
+    await h.step(4.5);
+    check('2-2: уровень засчитан', await h.eval(() => !!window.__dbg.Save.data.done['2-2']));
+    // a fresh run: the boat waits for Pupyrka
+    await fresh2(); await noEnemies(); await h.put(X2(200), Y2(Gc)); await h.step(0.2); await h.step(1.0, ['ArrowRight']); await h.step(0.3);
+    check('2-2: без спасения Пупырки лодка не уплывает', (await h.state()).st === 'play');
+  }
 
   check('нет ошибок в консоли', h.errors.length === 0, h.errors.join('\n'));
   await h.close();

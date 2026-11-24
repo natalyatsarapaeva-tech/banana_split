@@ -22,7 +22,7 @@ const G = window.__G = {
     this.player = new Player(def.start.x, def.start.y);
     this.pickle = new Pickle(def.start.x - 40, def.start.y);
     if (def.startChar) this.player.setChar(this, def.startChar);
-    this.boatParts = 0;
+    this.boatParts = 0; this.sisterFree = false;
     this.terrain = new TerrainCache(this); this.terrain.setScale(this.S);
     this.cam = new Camera(); this.cam.reset(this, this.player);
     this.solids = this.ents.filter(e => e.solid);
@@ -932,7 +932,7 @@ const UI = {
     this.focus = 0; this.paint();
   },
   dialog(lines, done) {
-    const names = { misha: 'Морковка Миша', pickle: 'Пикль', banni: 'Банни', kroshka: 'Крошка', baron: 'Барон Брюссель' };
+    const names = { misha: 'Морковка Миша', pickle: 'Пикль', banni: 'Банни', kroshka: 'Крошка', baron: 'Барон Брюссель', pupyrka: 'Сестричка Пупырка' };
     let k = 0;
     const show = () => {
       const L = lines[k];
@@ -945,6 +945,7 @@ const UI = {
       else if (L.who === 'banni') drawBanni(g, { x: 75, y: 172, face: 1, sx: 1, sy: 1, pose: 'idle', t: 0.5, hp: 3, scale: 2.1 });
       else if (L.who === 'kroshka') drawCookieGirl(g, 75, 150, { t: 0, s: 1.8 });
       else if (L.who === 'baron') drawBaron(g, 75, 150, { t: 0, s: 1.4 });
+      else if (typeof drawW2Portrait === 'function') drawW2Portrait(g, L.who);
       g.restore();
       this.el.querySelector('#d-next').onclick = () => { k++; if (k < lines.length) show(); else { this.hide(); done(); } };
       this.focus = 0; this.paint();

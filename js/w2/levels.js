@@ -5,7 +5,7 @@
 // Levels marked `soon` are not built yet.
 const W2_LEVELS = [
   { id: '2-1', num: '2-1', name: 'Пляж Кокосовой Стружки', node: [235, 250], sheep: 3, notes: 'w2-1:', thumb: 'assets/w2/thumb1.jpg' },
-  { id: '2-2', num: '2-2', name: 'Ананасовые Джунгли', node: [545, 215], sheep: 3, notes: 'w2-2:', soon: true },
+  { id: '2-2', num: '2-2', name: 'Ананасовые Джунгли', node: [545, 215], sheep: 3, notes: 'w2-2:', thumb: 'assets/w2/thumb2.jpg' },
   { id: '2-3', num: '2-3', name: 'Арбузный Риф', node: [520, 395], sheep: 2, notes: 'w2-3:', soon: true },
   { id: '2-4', num: '2-4', name: 'Манговые Водопады', node: [830, 250], soon: true },
   { id: '2-5', num: '2-5', name: 'Вулкан Горячего Джема', node: [1110, 230], soon: true },
@@ -33,7 +33,9 @@ addWorld(Object.assign({
 
 Object.assign(NOTES, {
   'w2-1:a': 'Пикль, внучок! Если письмо дойдёт — знай: мы держимся. В банке тесно, но мы поём песни про укроп. Уксус плывёт к Ананасовым Джунглям. — Бабушка Корнишон',
-  'w2-1:b': 'Помнишь, как ты в детстве разбивал плечом бочки с огурцами? Этот Хруст у тебя от дедушки. Пригодится! Целую в пупырышки. — Бабушка'
+  'w2-1:b': 'Помнишь, как ты в детстве разбивал плечом бочки с огурцами? Этот Хруст у тебя от дедушки. Пригодится! Целую в пупырышки. — Бабушка',
+  'w2-2:a': 'Пикль! Нас везут мимо Ананасовых Джунглей. Пупырку Уксус оставил в лагере — сторожить кладовую с банками. Найди её! — Бабушка Корнишон',
+  'w2-2:b': 'Пиратские оливки скользкие — сверху их не возьмёшь. Твой дедушка говорил: «Не можешь перепрыгнуть — пробей!» — Бабушка'
 });
 
 // ---------- helpers ----------
@@ -152,5 +154,69 @@ function buildW2L1() {
     start: { x: X(3), y: Y(G) }, sheep: 3, boatParts: 3
   });
 }
+// ---------- 2-2 Pineapple jungle (springs, jelly-bean vines, olives, mushrooms, the pirate camp with Pupyrka) ----------
+function buildW2L2() {
+  const b = new LB(221, 30), G = 24, H = 30, Gc = G - 12; // forest floor and the plateau with the pirate camp
+  const deco = (k, c, r, o) => b.decoBack.push(Object.assign({ k, x: X(c), y: Y(r) + 6 }, o || {}));
+  // A: the edge of the forest and a hill with rolling olives
+  b.ground(0, 23, G);
+  b.hint(1, 'w22-start', () => `Ананасовые Джунгли! Где-то здесь пираты держат Пупырку. Ананасы на пружинах подбрасывают высоко — держи ${Input.label('jump')}!`);
+  deco('bigpine', 13, G, { s: 0.9 }); deco('fern', 3, G); deco('fern', 21, G, { s: 1.2 }); deco('flower', 6, G - 0.2);
+  b.add(new PineSpring(X(9), Y(G))); b.plat(11, 15, G - 7); b.drops(11, G - 8, 5, 0);
+  b.add(new Shroom(X(18), Y(G)));
+  let top = b.slopeUp(24, G, 4); b.ground(28, 31, top); b.slopeDown(32, top, 4); b.ground(36, 44, G);
+  b.add(new OliveSpawner(X(30), Y(top), -1, 3.2));
+  b.drops(25, G - 7, 6, 30);
+  b.item('note', 38, G - 1, { id: 'w2-2:a' });
+  b.block(40, G - 4, 'drops'); b.block(41, G - 4, 'cherry'); b.block(42, G - 4, null, { kind: 'brick' });
+  // B: a stream under jelly-bean vines (or along its bottom as Pickle)
+  b.hint(43, 'w22-vines', () => `Лианы из мармеладок! Прыгни и хватайся, раскачивайся ${Input.label('move')}, ${Input.label('jump')} — отпустить. А по дну ручья могу пройти я.`);
+  seabed(b, 45, 80, G + 3); sea(b, 45, 80, Y(G) + 24, { amp: 3, period: 3 });
+  for (const c of [48, 55, 62, 69, 76]) { b.add(new JellyVine(X(c), Y(G - 9), 220)); b.plat(c - 1, c + 1, G - 10); }
+  pillar(b, 58, 59, G - 1); b.add(new JarKid(X(58) + 20, Y(G - 1), 0));
+  b.plat(64, 66, G - 13); b.item('gold', 65, G - 14, { i: 0 });
+  b.drops(50, G + 2, 4, 0); b.drops(70, G + 2, 4, 0); b.drops(51, G - 4, 3, 0); b.drops(72, G - 4, 3, 0);
+  // C: the thicket
+  b.ground(81, 144, G);
+  b.add(new UmbrellaCheckpoint(X(82), Y(G), 0));
+  deco('fern', 86, G, { s: 1.3 }); deco('bigpine', 95, G, { s: 1.1 }); deco('flower', 104, G - 0.2); deco('fern', 118, G);
+  for (const c of [90, 97, 106]) b.add(new Shroom(X(c), Y(G)));
+  b.add(new Olive(X(93), Y(G), -1, { patrol: true })); b.add(new Olive(X(113), Y(G), 1, { patrol: true }));
+  b.bricks(99, 99, G - 4); b.block(100, G - 4, 'armor'); b.bricks(101, 101, G - 4);
+  b.add(new JarKid(X(103), Y(G), 1));
+  b.plat(108, 111, G - 5); b.item('note', 110, G - 6, { id: 'w2-2:b' });
+  b.add(new PineSpring(X(115), Y(G))); b.plat(116, 119, G - 8); b.drops(116, G - 9, 4, 0);
+  // D: the climb to the camp; a pineapple wall hides a pocket with a cherry
+  b.hint(121, 'w22-climb', 'Наверх, к лагерю пиратов! А в ананасовой стене внизу что-то блестит — корку разобью только я.');
+  b.plat(124, 127, G - 4); b.add(new PineSpring(X(130), Y(G))); b.plat(132, 135, G - 8); b.plat(138, 140, G - 10);
+  b.ground(145, 220, Gc);
+  b.fill(146, G - 2, 148, G - 1, TL.EMPTY); b.fill(145, G - 2, 145, G - 1, TL.RIND); b.item('gold', 147, G - 1, { i: 1 });
+  b.add(new Olive(X(136), Y(G), -1, { patrol: true, speed: 90 }));
+  // E: the plateau: a spring to the sky (third cherry only with the jump held), the camp
+  b.add(new JarKid(X(150), Y(Gc), 2));
+  b.add(new PineSpring(X(154), Y(Gc)));
+  b.item('gold', 154, (Y(Gc) - 437 - 20) / T, { i: 2 }); // reachable only if the jump is held through the bounce (tests/w2.js)
+  b.add(new UmbrellaCheckpoint(X(158), Y(Gc), 1));
+  b.hint(159, 'w22-camp', 'Это лагерь Уксуса. Вон клетка — там Пупырка!');
+  deco('tent', 172, Gc); deco('tent', 182, Gc, { }); deco('fern', 167, Gc);
+  const gL = b.add(new PalisadeGate(163, Gc - 8, Gc - 1)), gR = b.add(new PalisadeGate(192, Gc - 8, Gc - 1));
+  const cage = b.add(new PupyrkaCage(X(188), Y(Gc), [
+    { who: 'pupyrka', text: 'Братик! Пикль! Я знала, что ты придёшь!' },
+    { who: 'pickle', text: 'Пупырка! Ты цела? А где остальные?' },
+    { who: 'pupyrka', text: 'Уксус увёз их дальше, к Арбузному рифу. А бабушку держит у себя на флагмане…' },
+    { who: 'banni', text: 'Тогда в лодку! Пупырка, ты с нами?' },
+    { who: 'pupyrka', text: 'Конечно! Я буду смотреть в подзорную трубу!' }
+  ]));
+  b.add(new CampFight(X(166), { gates: [gL, gR], cage, arena: { x0: 164 * T, x1: 192 * T, floor: Y(Gc) }, waves: [['olive', 'olive'], ['shroom', 'shroom', 'olive'], ['olive', 'shroom', 'olive', 'shroom']] }));
+  // F: the cove with the boat
+  seabed(b, 201, 219, Gc + 4); sea(b, 201, 219, Y(Gc) + 20, { amp: 3, period: 4 });
+  b.fill(220, 0, 220, H - 1, TL.SOLID);
+  b.add(new Boat(X(204), Y(Gc) + 20, 0, { cond: G => G.sisterFree, wait: 'Сначала спасём Пупырку из клетки!' }));
+  return Object.assign({}, W2_DEF, {
+    id: '2-2', name: 'Ананасовые Джунгли', theme: THEME_W2_2, level: b.L, ents: b.ents, decoBack: b.decoBack, decoFront: b.decoFront, fake: b.fake,
+    start: { x: X(3), y: Y(G) }, sheep: 3
+  });
+}
 LEVELS['2-dev'] = buildW2Dev;
+LEVELS['2-2'] = buildW2L2;
 LEVELS['2-1'] = buildW2L1;
