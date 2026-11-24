@@ -355,3 +355,150 @@ class LidTrap extends Enemy { // a jar lid with teeth: open (safe to cross) → 
   kill() { }
   draw(g) { drawLidTrap(g, this.cx, this.bottom, { open: this.open }); }
 }
+
+// ---------- 2-10 The flagship «Кислый Рассол» and Captain Vinegar ----------
+class StormTilt extends Ent { // the ship rolls in the storm: a slow sideways push, lightning now and then
+  constructor(w, h, force) { super(0, -2000, w, h + 4000); this.zone = 'wind'; this.active = true; this.force = force || 380; this.dir = 0; }
+  update(G, dt) {
+    this.t += dt; this.dir = Math.sin(this.t * 0.75);
+    const p = G.player; // the deck slides under the hero's feet
+    if (p.state === 'play' && p.onGround && !p.wet && !G.bossActive) { const dx = this.dir * 40 * dt; if (!rectSolid(G, p.x + dx, p.y, p.w, p.h - 2)) p.x += dx; }
+    G.flashT = Math.max(0, (G.flashT || 0) - dt * 1.6);
+    if (Math.random() < dt * 0.12) { G.flashT = 0.45; Audio2.play('thud'); }
+    if (Math.abs(this.dir) > 0.9) G.hint('storm', 'Корабль качает! Ветер сносит то влево, то вправо — держись ближе к канатам и мачтам.');
+  }
+}
+class RopeVine extends Vine { // ship rigging
+  draw(g) {
+    const ex = this.ax + Math.sin(this.ang) * this.len, ey = this.ay + Math.cos(this.ang) * this.len, sag = this.holder ? 0 : Math.sin(this.t * 2 + this.ph) * 6;
+    g.save(); g.lineCap = 'round'; g.beginPath(); g.moveTo(this.ax, this.ay); g.quadraticCurveTo(this.ax + (ex - this.ax) * 0.5 + sag, this.ay + (ey - this.ay) * 0.5, ex, ey);
+    g.strokeStyle = '#5a3a1a'; g.lineWidth = 7; g.stroke(); g.setLineDash([4, 6]); g.strokeStyle = '#c8a070'; g.lineWidth = 3; g.stroke(); g.setLineDash([]);
+    circ(g, this.ax, this.ay, 5); fs(g, '#8a8e96', '#3a3e46', 1.5); g.restore();
+  }
+}
+class RollingBarrel extends Olive { // barrels the captain rolls down from the crow's nest
+  constructor(x, y, dir) { super(x, y, dir); this.bossShot = true; this.active = true; this.life = 7; }
+  splat(G) { this.alive = false; G.burst(this.cx, this.cy, 12, ['#8a5a2a', '#c8904a', '#d8d8d8']); Audio2.play('break'); }
+  draw(g) { g.save(); g.translate(this.cx, this.bottom); g.rotate(this.rot); g.translate(0, -16); drawBarrel(g, 0, 22, {}); g.restore(); }
+}
+class BrineJar extends Enemy { // a jar of brine thrown in an arc; bursts on the deck
+  constructor(x, y, vx, vy) { super(x - 11, y - 14, 22, 28); this.vx = vx; this.vy = vy; this.active = true; this.stompable = false; this.freezable = false; this.bossShot = true; this.life = 4; }
+  update(G, dt) { this.t += dt; this.life -= dt; this.vy += 900 * dt; this.x += this.vx * dt; this.y += this.vy * dt; if (this.life <= 0 || rectSolid(G, this.cx - 4, this.bottom - 2, 8, 4)) { this.alive = false; Audio2.play('break'); G.burst(this.cx, this.bottom, 12, ['#c8e070', '#e8f8ff', '#ffffff']); } }
+  kill(G) { this.alive = false; G.burst(this.cx, this.cy, 8, ['#c8e070', '#ffffff']); }
+  draw(g) { g.save(); g.translate(this.cx, this.cy); g.rotate(this.t * 6); g.scale(0.55, 0.55); drawMarinadeJar(g, 0, 0, 0, 1); g.restore(); }
+}
+class SyrupShot extends Ent { // a syrup bomb thrown by a hero (grandma's gift)
+  constructor(x, y, dir) { super(x - 10, y - 10, 20, 20); this.vx = dir * 380; this.vy = -430; this.life = 2.5; }
+  update(G, dt) {
+    this.t += dt; this.life -= dt; this.vy += 900 * dt; this.x += this.vx * dt; this.y += this.vy * dt;
+    for (const e of G.ents) { if (!e.alive || !e.enemy || !overlap(this, e)) continue; if (e.boss && e.syrupHit) { e.syrupHit(G); } else if (!e.boss) e.kill(G, 'shot'); this.pop(G); return; }
+    if (this.life <= 0 || rectSolid(G, this.cx - 4, this.cy - 4, 8, 8) || waterAt(G, this.cx, this.cy)) this.pop(G);
+  }
+  pop(G) { this.alive = false; Audio2.play('pop'); G.burst(this.cx, this.cy, 14, ['#ffe8a0', '#e88a1a', '#ffffff']); }
+  draw(g) { drawSyrupBomb(g, this.cx, this.cy, this.t); }
+}
+(function () { // the syrup power: the fire button throws syrup bombs (for both heroes)
+  const sh = Player.prototype.shoot;
+  Player.prototype.shoot = function (G) {
+    if (this.power === 'syrup') { if (G.countOf(SyrupShot) < 2) { G.add(new SyrupShot(this.cx + this.face * 14, this.y + 10, this.face)); this.fireCd = 0.35; this.shootT = 0.15; Audio2.play('throw'); } return; }
+    return sh.call(this, G);
+  };
+  const up = Player.prototype.update;
+  Player.prototype.update = function (G, dt) {
+    up.call(this, G, dt);
+    if (this.char === 'pickle' && this.power === 'syrup' && this.state === 'play' && !this.swimming && Input.pressed('fire') && this.fireCd <= 0) this.shoot(G);
+  };
+})();
+class GrandmaHelper extends Ent { // Grandma Gherkin in the hold: tosses syrup bombs to the heroes
+  constructor(x, y) { super(x - 14, y - 40, 28, 40); this.fx = x; this.fy = y; this.layer = 0; this.on = false; this.timer = 0; }
+  update(G, dt) {
+    this.t += dt; if (!this.on) return;
+    this.timer -= dt;
+    const p = G.player;
+    if (this.timer <= 0 && p.power !== 'syrup' && !G.ents.some(e => e.alive && e instanceof Pickup && e.kind === 'syrup')) { this.timer = 2.5; const pk = G.add(new Pickup('syrup', clamp(p.cx + rnd(-120, 120), G.def.arena.x0 + 60, G.def.arena.x1 - 60), this.fy - 120)); pk.vy = 0; Audio2.play('throw'); G.npcSay(this, pick(['Держи, внучок!', 'Сироп — в Уксуса!', 'Сладенького ему!'])); }
+  }
+  draw(g) { if (this.on) drawGrandma(g, this.fx, this.fy, { t: this.t, wave: true, face: -1, s: 1.2 }); }
+}
+class Vinegar extends Enemy { // final boss: Captain Vinegar
+  constructor(ar) { super(0, 0, 60, 100); this.ar = ar; this.boss = true; this.active = true; this.name = 'Капитан Уксус'; this.barColor = '#8a4a7a'; this.freezable = false; this.slideable = false; this.starKill = false; this.reset(); }
+  reset() {
+    this.hp = 6; this.maxHp = 6; this.st = 'wait'; this.alive = true; this.fx = this.ar.x1 - 160; this.fy = this.ar.floor; this.vx = 0; this.vy = 0; this.flash = 0; this.face = -1; this.jarT = 2; this.thrown = 0;
+    if (this.ar.water) { this.ar.water.base = this.ar.waterLow; }
+    if (this.ar.grandma) this.ar.grandma.on = false;
+    this.sync();
+  }
+  sync() { this.x = this.fx - 30; this.y = this.fy - 100; }
+  get phase() { return this.hp > 4 ? 1 : this.hp > 2 ? 2 : 3; }
+  begin(G) { this.st = 'taunt'; this.timer = 1.4; Audio2.play('roar'); }
+  update(G, dt) {
+    this.t += dt; this.flash = Math.max(0, this.flash - dt);
+    const a = this.ar, p = G.player;
+    if (this.st !== 'wait' && this.st !== 'dead') this.jarT -= dt;
+    switch (this.st) {
+      case 'wait': break;
+      case 'taunt': this.face = sign(p.cx - this.fx) || this.face; this.timer -= dt; if (this.timer <= 0) this.next(G); break;
+      case 'lunge': this.fx += this.dir * 430 * dt; if (this.fx < a.x0 + 40 || this.fx > a.x1 - 40 || Math.abs(this.fx - this.tx) < 10) { this.fx = clamp(this.fx, a.x0 + 40, a.x1 - 40); this.st = 'tired'; this.timer = 1.7; Audio2.play('thud'); G.hint('vin1', 'Уксус выдохся после выпада! Прыгай ему на треуголку или бей Хрустом!'); } break;
+      case 'jumpUp': case 'jumpDown': {
+        this.vy += 2100 * dt; this.fx += this.vx * dt; this.fy += this.vy * dt;
+        const land = this.st === 'jumpUp' ? a.nest : a.floor;
+        if (this.vy > 0 && this.fy >= land) { this.fy = land; this.vy = 0; G.shake(0.25); Audio2.play('thud'); if (this.st === 'jumpUp') { this.st = 'nest'; this.timer = 1; this.thrown = 0; } else this.next(G); }
+        break;
+      }
+      case 'nest':
+        this.face = sign(p.cx - this.fx) || this.face; this.timer -= dt;
+        if (this.timer <= 0) {
+          if (this.thrown < 3) { this.thrown++; this.timer = 1.1; G.add(new RollingBarrel(this.fx + this.face * 30, this.fy - 4, this.face)); Audio2.play('throw'); }
+          else { this.st = 'pant'; this.timer = 1.8; G.hint('vin2', 'Он запыхался в «вороньем гнезде»! Заберись по канатам и доскам — и прыгай на него!'); }
+        }
+        break;
+      case 'pant': this.timer -= dt; if (this.timer <= 0) { this.st = 'nest'; this.timer = 0.8; this.thrown = 0; } break;
+      case 'crate': { // phase 3: hops between two crates while the hold floods
+        this.face = sign(p.cx - this.fx) || this.face; this.timer -= dt;
+        if (this.timer <= 0) { const other = this.fx < (a.x0 + a.x1) / 2 ? a.crates[1] : a.crates[0]; this.st = 'hop'; this.vy = -900; this.vx = (other - this.fx) / 0.86; this.tx = other; }
+        break;
+      }
+      case 'hop': this.vy += 2100 * dt; this.fx += this.vx * dt; this.fy += this.vy * dt; if (this.vy > 0 && this.fy >= a.crateTop) { this.fy = a.crateTop; this.fx = this.tx; this.vy = 0; this.st = 'crate'; this.timer = 2.2; } break;
+      case 'tired': this.timer -= dt; if (this.timer <= 0) this.next(G); break;
+      case 'hit': this.timer -= dt; if (this.timer <= 0) { if (this.hp <= 0) { this.st = 'sweet'; this.timer = 1.6; G.clearBossShots(); Audio2.play('win'); } else this.next(G); } break;
+      case 'sweet': this.timer -= dt; if (this.timer <= 0) { this.st = 'dead'; G.bossDefeated(this); } break;
+    }
+    // jars of brine: in the deck and hold phases
+    if (this.jarT <= 0 && ['taunt', 'crate', 'tired'].includes(this.st) && this.st !== 'tired') { this.jarT = this.phase === 3 ? 2.2 : 2.6; const d = p.cx - this.fx, tt = clamp(Math.abs(d) / 300, 0.6, 1.4); G.add(new BrineJar(this.fx, this.fy - 70, d / tt, (p.cy - this.fy + 70) / tt - 0.5 * 900 * tt)); Audio2.play('throw'); }
+    // the flood in phase 3
+    if (a.water) { const flood = this.phase === 3 && this.st !== 'wait', target = flood ? a.floor - 30 : a.waterLow; a.water.base = approach(a.water.base, target, (flood && a.water.base > a.floor + 20 ? 400 : 40) * dt); }
+    this.harmful = ['lunge', 'taunt', 'jumpUp', 'jumpDown', 'nest', 'hop', 'crate'].includes(this.st);
+    this.sync();
+  }
+  next(G) {
+    const a = this.ar, p = G.player;
+    if (this.phase === 1) {
+      if (this.st === 'taunt') { this.st = 'lunge'; this.dir = sign(p.cx - this.fx) || this.face; this.face = this.dir; this.tx = clamp(p.cx + this.dir * 120, a.x0 + 40, a.x1 - 40); Audio2.play('throw'); }
+      else { this.st = 'taunt'; this.timer = 0.9; }
+      return;
+    }
+    if (this.phase === 2) { this.st = 'jumpUp'; this.vy = -1250; this.vx = (a.nestX - this.fx) / 1.0; this.face = sign(this.vx) || this.face; Audio2.play('jump'); return; }
+    if (!a.grandma.on) { a.grandma.on = true; a.grandma.timer = 0.5; G.pickle.speak('Бабушка!!', 3, true); G.npcSay(a.grandma, 'Держитесь, внучки! Трюм заливает, но у меня есть сахарный сироп!'); }
+    this.st = 'hop'; this.tx = a.crates[1]; this.vy = -900; this.vx = (this.tx - this.fx) / 0.86;
+  }
+  hurt(G, p) {
+    this.hp--; this.flash = 0.8; this.st = 'hit'; this.timer = 0.9; Audio2.play('bossHit'); G.shake(0.3); G.mercy(this.ar);
+    G.burst(this.fx, this.fy - 60, 16, ['#8a4a7a', '#ffffff', '#c8e070']);
+    if (this.phase === 2 && this.fy < this.ar.floor - 10) { this.st = 'jumpDown'; this.vy = -300; this.vx = 0; }
+    if (p) { p.vy = -760; p.cutOk = false; p.vx = (p.cx < this.fx ? -1 : 1) * 260; }
+  }
+  onStomp(G, p) {
+    if (this.st === 'tired' || this.st === 'pant') { this.hurt(G, p); return 'none'; }
+    if (this.phase === 3) { G.hint('vin3', `Сверху его не взять — бросай сироп-бомбы (${Input.label('fire')})!`); }
+    if (this.harmful) { Audio2.play('bump'); return 'bounce'; }
+    return 'none';
+  }
+  onCrunch(G) { if (this.st === 'tired' || this.st === 'pant') this.hurt(G, null); }
+  syrupHit(G) { if (this.phase === 3 && this.st !== 'hit' && this.st !== 'sweet') this.hurt(G, null); else { Audio2.play('bump'); } }
+  onShot(G) { Audio2.play('bump'); return true; }
+  onPickle() { Audio2.play('bump'); }
+  kill() { }
+  draw(g) {
+    if (this.st === 'wait') return;
+    drawVinegar(g, this.fx, this.fy, { t: this.t, face: this.face, flash: this.flash > 0 && Math.floor(this.flash * 12) % 2 === 0, dizzy: this.st === 'tired' || this.st === 'pant', lunge: this.st === 'lunge', sweet: this.st === 'sweet' || this.st === 'dead' });
+  }
+}

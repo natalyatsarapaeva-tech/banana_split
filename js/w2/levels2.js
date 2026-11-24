@@ -273,3 +273,85 @@ Object.assign(LEVELS, { '2-4': buildW2L4, '2-5': buildW2L5, '2-6': buildW2L6, '2
   for (let n = 4; n <= 10; n++) w.assets.push([`w2bg${n}`, `assets/w2/bg${n}.jpg`]);
   w.assets.push(['w2bg6b', 'assets/w2/bg6b.jpg']);
 })();
+
+// ---------- 2-10 The flagship «Кислый Рассол»: storm, the hold, the rigging, Captain Vinegar ----------
+function buildW2L10() {
+  const b = new LB(204, 26), G = 19, H = 26;
+  b.add(new StormTilt(204 * T, H * T, 360));
+  // A: the stern deck
+  b.ground(0, 50, G);
+  b.hint(1, 'w210-start', 'Флагман «Кислый Рассол»! Шторм, пираты — а где-то в трюме бабушка и вся наша семья. Вперёд!');
+  for (const c of [14, 27, 40]) b.add(new PirateGherkin(X(c), Y(G), { speed: 70 }));
+  b.add(new Barrel(20, G - 1, 'drops')); b.add(new Barrel(21, G - 1, 'ice'));
+  b.add(new JarKid(X(31), Y(G), 0)); b.item('note', 45, G - 1, { id: 'w2-10:a' });
+  b.add(new RopeVine(X(24), Y(G - 13), 330)); b.plat(21, 27, G - 11); b.item('gold', 24, G - 12, { i: 0 });
+  b.block(9, G - 4, 'helmet'); b.block(10, G - 4, 'drops');
+  // B: down into the sloshing hold
+  b.add(new UmbrellaCheckpoint(X(48), Y(G), 0));
+  b.ground(51, 99, G + 4); sea(b, 51, 99, Y(G + 4) - 30, { amp: 22, period: 4.5 });
+  for (const [c, r] of [[56, G + 1], [64, G], [72, G + 1], [80, G], [88, G + 1]]) b.plat(c, c + 3, r);
+  b.add(new JarKid(X(65), Y(G), 1)); b.add(new JarKid(X(81), Y(G), 2));
+  b.add(new PirateGherkin(X(70), Y(G + 4))); b.add(new PirateGherkin(X(90), Y(G + 4))); b.add(new GhostMarinade(X(76), Y(G - 3)));
+  b.drops(57, G - 1, 3, 0); b.drops(73, G - 1, 3, 0); b.add(new SodaVent(X(60), Y(G + 4)));
+  let top = b.slopeUp(95, G + 4, 4); b.ground(99, 99, top);
+  // C: the rigging between the masts
+  b.ground(100, 150, G);
+  for (const c of [108, 120, 132, 144]) b.add(new RopeVine(X(c), Y(G - 14), 280));
+  b.plat(112, 116, G - 7); b.plat(124, 129, G - 12); b.plat(136, 140, G - 8); b.item('gold', 126, G - 13, { i: 1 });
+  b.add(new JarKid(X(114), Y(G - 7), 3)); b.item('gold', 138, G - 9, { i: 2 }); b.item('note', 128, G - 13, { id: 'w2-10:b' });
+  b.add(new PirateGherkin(X(118), Y(G))); b.add(new PirateGherkin(X(138), Y(G), { speed: 80 })); b.add(new CrabCaper(X(128), Y(G)));
+  b.add(new Barrel(146, G - 1, 'drops'));
+  // D: the main deck — Captain Vinegar
+  b.add(new UmbrellaCheckpoint(X(151), Y(G), 1));
+  b.ground(151, 203, G);
+  const gL = b.add(new Gate(155, G - 12, G - 1)), gR = b.add(new Gate(197, G - 12, G - 1));
+  b.plat(173, 179, G - 8); b.plat(160, 163, G - 4); b.plat(189, 192, G - 4);
+  b.add(new RopeVine(X(166), Y(G - 13), 220)); b.add(new RopeVine(X(186), Y(G - 13), 220));
+  b.fill(162, G - 3, 163, G - 1, TL.SOLID); b.fill(189, G - 3, 190, G - 1, TL.SOLID);
+  b.plat(193, 195, G - 6);
+  const water = sea(b, 156, 196, H * T + 200);
+  const grandma = b.add(new GrandmaHelper(X(194), Y(G - 6)));
+  const arena = { x0: 156 * T, x1: 197 * T, floor: Y(G), top: Y(G - 12), camMin: 155 * T, camMax: 198 * T,
+    nest: Y(G - 8), nestX: X(176), crates: [163 * T, 190 * T], crateTop: Y(G - 3), water, waterLow: H * T + 200, grandma };
+  const boss = b.add(new Vinegar(arena)); b.add(new BossTrigger(158 * T));
+  b.fill(203, 0, 203, H - 1, TL.SOLID);
+  return Object.assign({}, W2_DEF, {
+    id: '2-10', name: 'Флагман «Кислый Рассол»', theme: THEME_W2_10, level: b.L, ents: b.ents, decoBack: b.decoBack, decoFront: b.decoFront, fake: b.fake,
+    start: { x: X(3), y: Y(G) }, sheep: 4, arena, gates: [gL, gR], boss,
+    bossHint: 'Капитан Уксус! После выпада он выдыхается — тогда прыгай ему на треуголку или бей Хрустом.',
+    onBossDefeated(G) {
+      G.pickle.speak('Он… улыбается?', 3, true); G.player.inv = 99;
+      G.later(1.6, () => G.dialog([
+        { who: 'vinegarSweet', text: 'Сироп?.. Сладко… Я сто лет не пробовал сладкого… Когда-то я был виноградом, а потом меня забыли в бочке.' },
+        { who: 'grandma', text: 'Вот и славно, капитан. Пойдёмте-ка с нами на Праздник Урожая — угощу виноградным сорбетом.' },
+        { who: 'vinegarSweet', text: 'Эй, команда! Открыть все банки! Огурцы — на свободу!' },
+        { who: 'pickle', text: 'Бабушка! Мы всех нашли!' }
+      ], () => { Save.data.family = Object.assign({}, Save.data.family, { grandma: true }); Save.save(); worldFinale(WORLDS.find(w => w.id === 2), true); }));
+    }
+  });
+}
+LEVELS['2-10'] = buildW2L10;
+(function () { const w = WORLDS.find(q => q.id === 2), l = w.levels.find(q => q.id === '2-10'); l.soon = false; l.thumb = 'assets/w2/thumb10.jpg'; l.notes = 'w2-10:'; l.sheep = 4; w.assets.push(['w2finale', 'assets/w2/finale.jpg']); })();
+
+// the story screens at the end of a world (World 2 for now)
+function worldFinale(w, fromGame) {
+  const texts = {
+    2: [
+      'Сахарный сироп растопил кислое сердце Капитана Уксуса. «Я сто лет не пробовал сладкого…» — прошептал он и впервые за сто лет улыбнулся.',
+      'Все банки открыты! Бабушка Корнишон, дядя Зеленец, сестричка Пупырка, кузен Кабачок и вся огуречная родня снова вместе.',
+      'На Огуречном острове устроили Праздник Урожая. Бабушка угощала всех сорбетом, Уксус травил морские байки, а Банни и Пикль танцевали до утра.',
+      'Конец второго мира! Спасибо, что прошли Фруктовый Архипелаг. Впереди — Зимняя Пекарня…'
+    ]
+  }[w.id] || ['Конец!'];
+  UI.finWorld = w.id; UI.finIdx = 0; G.setState('finale'); canvas.style.filter = ''; Audio2.muffle(false); Audio2.play('win');
+  if (!ASSETS.w2finale) loadImage('w2finale', 'assets/w2/finale.jpg');
+  if (!fromGame) G.level = null;
+  const render = () => {
+    const last = UI.finIdx >= texts.length - 1;
+    UI.html('finale', `<div class="caption"><p>${texts[UI.finIdx]}</p><div class="menu row"><button id="f-next">${!last ? 'Дальше ▸' : (fromGame ? 'Итоги ▸' : 'На карту ▸')}</button></div></div>`);
+    UI.el.querySelector('#f-next').onclick = () => { if (!last) { UI.finIdx++; G.stateT = 0; render(); } else done(); };
+    UI.onBack = done;
+  };
+  const done = () => { if (fromGame && G.level) G.showResults(); else UI.map(w.levels.length - 1, WORLDS.indexOf(w)); };
+  render();
+}

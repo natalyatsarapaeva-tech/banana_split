@@ -738,6 +738,7 @@ const Scenes = {
     else { g.save(); g.translate(sn.x - 40, sn.y + 34); g.scale(0.34, 0.34); drawBalloon(g, 0, Math.sin(t * 2) * 6, { t, captain: true }); g.restore(); }
   },
   finale(g, G) {
+    if (UI.finWorld > 1 && typeof drawWorldFinale === 'function') return drawWorldFinale(g, G, UI.finWorld, UI.finIdx);
     const W = G.viewW, t = G.stateT, k = UI.finIdx;
     const confetti = (n) => { for (let i = 0; i < n; i++) { const x = (i * 97 + Math.sin(i) * 40) % W, y = ((t * (60 + (i % 5) * 20) + i * 53) % (VIEW_H + 40)) - 20; g.save(); g.translate(x, y); g.rotate(t * 3 + i); g.fillStyle = SPRINKLES[i % 6]; g.fillRect(-5, -2, 10, 4); g.restore(); } };
     if (k <= 1) {
@@ -941,13 +942,13 @@ const UI = {
         ${thumb}
         <div class="minfo"><div class="lvl">${info.bonus ? 'Бонус' : 'Уровень ' + info.num}</div><div class="mname">${info.name}</div><div class="mstats">${stats}</div></div>
         <div class="mbtns">${unlocked ? `<button id="m-play">${Save.data.done[id] ? 'Ещё раз' : 'Играть'} ▸</button>` : ''}
-          <div class="mrow"><button id="m-back" class="ghost">Меню</button>${others.length ? `<button id="m-world" class="ghost" title="${others[0].name}">⇄ Мир ${others[0].id}</button>` : ''}${w.id === 1 && Save.data.done[5] ? '<button id="m-end" class="ghost">Финал</button>' : ''}</div></div>
+          <div class="mrow"><button id="m-back" class="ghost">Меню</button>${others.length ? `<button id="m-world" class="ghost" title="${others[0].name}">⇄ Мир ${others[0].id}</button>` : ''}${w.finished() ? '<button id="m-end" class="ghost">Финал</button>' : ''}</div></div>
       </div>`);
     this.el.querySelectorAll('.node').forEach(n => n.onclick = () => { const k = +n.dataset.k; if (k === this.mapSel && this.levelUnlocked(w.levels[k])) G.startLevel(w.levels[k].id); else this.setMap(k); });
     const pb = this.el.querySelector('#m-play'); if (pb) pb.onclick = () => G.startLevel(id);
     this.el.querySelector('#m-back').onclick = () => this.title();
     const wb = this.el.querySelector('#m-world'); if (wb) wb.onclick = () => this.switchWorld();
-    const eb = this.el.querySelector('#m-end'); if (eb) eb.onclick = () => this.finale(false);
+    const eb = this.el.querySelector('#m-end'); if (eb) eb.onclick = () => w.id === 1 ? this.finale(false) : worldFinale(w, false);
     this.onBack = () => this.title();
     this.focus = 0; this.paint();
   },
@@ -973,7 +974,7 @@ const UI = {
     show();
   },
   finale(fromGame) {
-    this.finIdx = 0; G.setState('finale'); canvas.style.filter = ''; Audio2.setRate(1); Audio2.setTone(20000); Audio2.muffle(false); Audio2.play('win');
+    this.finWorld = 1; this.finIdx = 0; G.setState('finale'); canvas.style.filter = ''; Audio2.setRate(1); Audio2.setTone(20000); Audio2.muffle(false); Audio2.play('win');
     if (!fromGame) G.level = null;
     const texts = [
       'Котёл Горечи лопнул и разлетелся разноцветным конфетти! А Барон Брюссель сел на пол и тихо сказал: «Меня никто никогда не выбирал на тарелку…»',
@@ -1046,7 +1047,7 @@ const UI = {
 };
 
 // is there something for the fire button to do right now?
-function fireAvailable(p) { return !!p && (((p.power === 'cherry' || p.power === 'mint') && p.char === 'banni') || p.power === 'flipper' || p.state === 'balloon'); }
+function fireAvailable(p) { return !!p && (((p.power === 'cherry' || p.power === 'mint') && p.char === 'banni') || p.power === 'flipper' || p.power === 'syrup' || p.state === 'balloon'); }
 // ---------------- Touch controls ----------------
 const Touch = {
   el: document.getElementById('touch'), visible: false,

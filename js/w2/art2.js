@@ -304,3 +304,12 @@ function drawW2Portrait2(g, who) {
   if (m[who]) { m[who](); return true; }
   return false;
 }
+
+// ---------- World 2 finale screens (the painting of the harvest feast) ----------
+function drawWorldFinale(g, G, world, k) {
+  const W = G.viewW, t = G.stateT, img = ASSETS.w2finale;
+  g.fillStyle = '#2a1a10'; g.fillRect(0, 0, W, VIEW_H);
+  if (img) { const sc = Math.max(W / img.width, VIEW_H / img.height) * (1.04 + k * 0.02), w = img.width * sc, h = img.height * sc; g.drawImage(img, (W - w) / 2 - Math.sin(t * 0.2) * 10, (VIEW_H - h) / 2, w, h); }
+  for (let i = 0; i < 60; i++) { const x = (i * 97 + Math.sin(i) * 40) % W, y = ((t * (60 + (i % 5) * 20) + i * 53) % (VIEW_H + 40)) - 20; g.save(); g.translate(x, y); g.rotate(t * 3 + i); g.fillStyle = SPRINKLES[i % 6]; g.fillRect(-5, -2, 10, 4); g.restore(); }
+  const gr = g.createLinearGradient(0, VIEW_H * 0.55, 0, VIEW_H); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(20,10,5,0.6)'); g.fillStyle = gr; g.fillRect(0, 0, W, VIEW_H);
+}
