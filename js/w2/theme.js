@@ -191,3 +191,45 @@ const THEME_W2_3 = baseTheme({
     return false;
   }
 });
+
+// ---------- 2-4 … 2-10: painted background + a per-level terrain palette ----------
+// The painted strip (assets/w2/bgN.jpg) is scaled to bgH × view height; its vertical position follows
+// the camera across the whole level height, so tall levels (2-4, 2-5) keep it in view.
+function paintedBackground(th, ctx, G, camX, camY) {
+  const W = G.viewW;
+  if (th.bgKey && ASSETS[th.bgKey] === undefined && !th._bgReq) { th._bgReq = true; loadImage(th.bgKey, th.bgSrc).then(im => { if (!im) ASSETS[th.bgKey] = null; }); }
+  const gr = ctx.createLinearGradient(0, 0, 0, VIEW_H); gr.addColorStop(0, th.sky[0]); gr.addColorStop(1, th.sky[1]); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, VIEW_H);
+  const img = th.bgKey && ASSETS[th.bgKey];
+  if (img) {
+    const h = VIEW_H * (th.bgH || 1.12), span = Math.max(1, G.level.H * T - VIEW_H), k = clamp(camY / span, 0, 1);
+    parallaxImage(ctx, img, camX, th.px || 0.1, -k * (h - VIEW_H), h, W);
+  }
+  if (th.tint) { ctx.fillStyle = th.tint; ctx.fillRect(0, 0, W, VIEW_H); }
+}
+function w2Theme(o) {
+  return baseTheme(Object.assign({
+    world: 2, drips: false, rim: 'rgba(0,0,0,0.28)', px: 0.1,
+    body: ['#a87a4a', '#8a6038', '#6a4828'], topCol: '#6ac04a', topEdge: '#2e6a1a', tuft: ['#4caf3a', '#5ac042'], speck: 'rgba(40,20,5,0.3)',
+    plankCol: ['#8a5a2a', '#4a2c10'], breakColors: ['#8a5a2a', '#c8904a', '#f2e6c8'], fallColors: ['#ffffff', '#cccccc'],
+    bodyColor(c, r, d) { return d <= 0 ? this.body[0] : d <= 2 ? this.body[1] : this.body[2]; },
+    bodyDetail(g, c, r, d, x, y) { for (let i = 0; i < 3; i++) { g.fillStyle = hash2(c * 7 + i, r * 3) < 0.5 ? this.speck : 'rgba(255,255,255,0.12)'; g.fillRect(x + 4 + hash2(c + i, r) * 30, y + 4 + hash2(c, r + i) * 30, 3, 3); } },
+    top() { return this.topCol; },
+    surfaceBits(g, c, r, at) { if (!this.tuft) return; for (let i = 0; i < 4; i++) { const p = at((i + 0.5) / 4); g.save(); g.translate(p.x, p.y - 1); g.rotate(-0.5 + hash2(c + i, r) * 1); g.beginPath(); g.ellipse(0, -3, 3, 6.5, 0, 0, TAU); g.fillStyle = this.tuft[i % 2]; g.fill(); g.restore(); } },
+    plank(g, x, y, w) { rrect(g, x, y, w, 11, 4); fs(g, this.plankCol[0], this.plankCol[1], 1.6); for (let i = 14; i < w; i += 26) line(g, x + i, y + 2, x + i + 8, y + 8, 'rgba(0,0,0,0.25)', 1.3); },
+    special(g, L, c, r, t) { if (t === TL.RIND) { (this.rindDraw || drawRindTile)(g, c * T, r * T, c, r); return true; } return false; },
+    specialTop(g, L, c, r, t) { return t === TL.RIND; },
+    drawBackground(ctx, G, camX, camY) { paintedBackground(this, ctx, G, camX, camY); },
+    decoX(g, d, G) {
+      if (d.k === 'hut') { drawBananaHut(g, d.x, d.y, d.s); return true; }
+      if (d.k === 'banniDad') { drawBananaFolk(g, d.x, d.y, { kind: 'dad', t: G ? G.time : 0, face: -1 }); return true; }
+      return THEME_W2_2.decoX(g, d, G) || THEME_W2_3.decoX(g, d, G);
+    }
+  }, o));
+}
+const THEME_W2_4 = w2Theme({ id: 'w2-4', bgKey: 'w2bg4', bgSrc: 'assets/w2/bg4.jpg', bgH: 1.9, sky: ['#5ab0e8', '#ffd890'], body: ['#f2a85a', '#e08a3a', '#c8702a'], topCol: '#ffe2b0', topEdge: '#c87a2a', tuft: ['#5ab83a', '#7ad04a'], speck: 'rgba(160,80,20,0.35)', waterCol: ['rgba(255,190,80,0.55)', 'rgba(230,130,30,0.85)'], waterTint: 'rgba(255,190,80,0.2)' });
+const THEME_W2_5 = w2Theme({ id: 'w2-5', bgKey: 'w2bg5', bgSrc: 'assets/w2/bg5.jpg', bgH: 1.25, sky: ['#2a0a0a', '#8a2a1a'], body: ['#4a2a22', '#3a1e18', '#2a1410'], topCol: '#6a3a2a', topEdge: '#e2363c', tuft: null, speck: 'rgba(255,90,40,0.35)', plankCol: ['#e2363c', '#7a1a14'], brothCol: ['rgba(226,40,60,0.93)', '#ff8a8a', 'rgba(226,40,60,0.55)'], fallColors: ['#ff6a6a', '#ffb0b0'], breakColors: ['#4a2a22', '#e2363c', '#ffb0a0'] });
+const THEME_W2_6 = w2Theme({ id: 'w2-6', bgKey: 'w2bg6', bgSrc: 'assets/w2/bg6.jpg', bgH: 1.05, sky: ['#5ac0f0', '#fff0a0'], body: ['#f2e0a0', '#e8cc80', '#d8b460'], topCol: '#fffaf0', topEdge: '#e8d8b4', tuft: null, waterCol: ['rgba(255,230,90,0.7)', 'rgba(240,200,40,0.92)'], waterTint: 'rgba(255,230,120,0.2)' });
+const THEME_W2_7 = w2Theme({ id: 'w2-7', bgKey: 'w2bg7', bgSrc: 'assets/w2/bg7.jpg', bgH: 1.15, sky: ['#e8802a', '#ffd08a'], body: ['#6a5430', '#5a4626', '#4a3a1e'], topCol: '#5aa83a', topEdge: '#2a6a1e', iceTop: '#7ad04a', iceEdge: '#2e6a1a', iceShine() { } });
+const THEME_W2_8 = w2Theme({ id: 'w2-8', bgKey: 'w2bg8', bgSrc: 'assets/w2/bg8.jpg', bgH: 1.15, sky: ['#04140c', '#0a2a1a'], body: ['#2a4a3a', '#1e3a2c', '#142a20'], topCol: '#3a7a4a', topEdge: '#1a4a2a', tuft: ['#2e8a4a', '#4aa85a'], waterCol: ['rgba(40,120,90,0.6)', 'rgba(10,50,40,0.9)'], waterTint: 'rgba(40,140,100,0.18)', dark: true });
+const THEME_W2_9 = w2Theme({ id: 'w2-9', bgKey: 'w2bg9', bgSrc: 'assets/w2/bg9.jpg', bgH: 1.15, sky: ['#0a1a2a', '#3a5a6a'], body: ['#5a4a3a', '#4a3a2e', '#3a2c22'], topCol: '#7a8a7a', topEdge: '#3a4a3a', tuft: ['#3a6a4a', '#4a7a5a'], plankCol: ['#9aa0a8', '#3a3e46'], waterCol: ['rgba(60,140,130,0.6)', 'rgba(20,60,60,0.92)'], waterTint: 'rgba(80,160,150,0.18)', tint: 'rgba(10,20,30,0.15)' });
+const THEME_W2_10 = w2Theme({ id: 'w2-10', bgKey: 'w2bg10', bgSrc: 'assets/w2/bg10.jpg', bgH: 1.15, sky: ['#2a2a3a', '#5a5a6a'], body: ['#8a5a2a', '#6a4420', '#4a2e14'], topCol: '#a87a4a', topEdge: '#5a3a1a', tuft: null, plankCol: ['#a8784a', '#4a2c10'], waterCol: ['rgba(70,170,130,0.65)', 'rgba(20,70,60,0.92)'], waterTint: 'rgba(80,170,140,0.2)', rain: true, tint: 'rgba(20,20,40,0.12)' });

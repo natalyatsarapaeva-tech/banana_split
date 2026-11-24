@@ -22,7 +22,7 @@ const G = window.__G = {
     this.player = new Player(def.start.x, def.start.y);
     this.pickle = new Pickle(def.start.x - 40, def.start.y);
     if (def.startChar) this.player.setChar(this, def.startChar);
-    this.boatParts = 0; this.sisterFree = false;
+    this.boatParts = 0; this.sisterFree = false; this.relFree = false; this.familyMet = false; this.lightR = 0; this.flashT = 0;
     this.terrain = new TerrainCache(this); this.terrain.setScale(this.S);
     this.cam = new Camera(); this.cam.reset(this, this.player);
     this.solids = this.ents.filter(e => e.solid);
@@ -53,7 +53,7 @@ const G = window.__G = {
     if (this.flood) { const t = this.ents.find(e => e.alive && e instanceof ToastPlat && Math.abs(e.cx - p.cx) > 150 && e.baseY > ar.floor - 200); if (!t) return; x = t.cx; y = t.baseY - 30; }
     this.add(new Pickup('ice', x, y)); this.burst(x, y, 10, ['#d6f3ff', '#ffffff']);
   },
-  liquidAt(x, y) { if (this.waters.length && waterAt(this, x, y)) return TL.WATER; const t = this.level.tileAt(x, y); if (isLiquidT(t)) return t; if (this.flood && y > this.flood.y && x > this.flood.x0 && x < this.flood.x1) return TL.BROTH; return 0; },
+  liquidAt(x, y) { if (this.waters.length && waterAt(this, x, y)) return TL.WATER; for (const z of this.zones) if (z.liquid && z.alive) { const l = z.liquid(x, y); if (l) return l; } const t = this.level.tileAt(x, y); if (isLiquidT(t)) return t; if (this.flood && y > this.flood.y && x > this.flood.x0 && x < this.flood.x1) return TL.BROTH; return 0; },
   liquidSurface(x, y) {
     if (this.waters.length) { const w = waterAt(this, x, y) || waterAt(this, x, y + T); if (w) return w.surfaceY(this.time); }
     if (this.flood && y > this.flood.y - 4 && x > this.flood.x0 && x < this.flood.x1) return this.flood.y;
@@ -78,7 +78,7 @@ const G = window.__G = {
     this.autoscroll = { speed: d.speed, stopX: d.stopX, camY: d.camY }; this.rideStarted = true; this.rideStartX = this.cam.x;
     this.cam.lockY = d.camY; Audio2.setRate(1.07); this.checkpoint = { ride: true, x: 0, y: 0 };
     for (const e of this.ents) if (e instanceof Barrier) e.alive = false;
-    this.toast('В полёт!');
+    this.toast(d.rideToast || 'В полёт!');
     this.pickle.speak(`Шар слушается стрелок, пушка — ${Input.label('fire')} или ${Input.label('jump')}. Сбивай мармеладных мишек и собирай капли!`, 6, true);
   },
   startFlood(ar) {
@@ -147,6 +147,7 @@ const G = window.__G = {
       this.cam.minX = d.arena.camMin; this.cam.maxX = d.arena.camMax - this.viewW;
       if (this.cam.maxX < this.cam.minX) { const c = (d.arena.camMin + d.arena.camMax) / 2 - this.viewW / 2; this.cam.minX = this.cam.maxX = c; }
       this.cam.lockY = clamp(d.arena.floor - VIEW_H + 90, 0, this.level.H * T - VIEW_H);
+      if (d.arena.lowView) { this.cam.lockY = d.arena.floor - VIEW_H + 90; this.cam.minY = Math.min(0, this.cam.lockY); }
     } else for (const e of this.ents) if (e.alive && e instanceof Gummy && e.cx > this.cam.x + this.viewW * 0.5) e.alive = false;
     Audio2.setRate(d.bossRate);
     this.toast(this.boss.name + '!');
@@ -156,7 +157,7 @@ const G = window.__G = {
   bossDefeated(boss) {
     this.bossActive = false; Audio2.setRate(this.musicRate);
     for (const g of this.def.gates) g.open();
-    this.cam.minX = 0; this.cam.maxX = this.level.W * T - this.viewW; this.cam.lockY = null;
+    this.cam.minX = 0; this.cam.maxX = this.level.W * T - this.viewW; this.cam.lockY = null; this.cam.minY = 0;
     this.toast(boss.name + ' повержен!');
     const arB = this.def.arena; if (arB) for (const e of this.ents) if (e.alive && e.enemy && !e.boss && e.cx > arB.x0 - 40 && e.cx < arB.x1 + 40) { e.alive = false; this.add(new Poof(e.cx, e.cy, null)); }
     this.shake(0.4);
@@ -307,7 +308,7 @@ const G = window.__G = {
         break;
       case 'win': {
         this.worldUpdate(dt);
-        if (this.winRide) { const p = this.player; p.x += 220 * dt; p.y -= 90 * dt; if (this.stateT > 3) this.showResults(); break; }
+        if (this.winRide) { const p = this.player; p.x += 220 * dt; if (!this.def.boatRide) p.y -= 90 * dt; if (this.stateT > 3) this.showResults(); break; }
         if (this.winBonus) { if (this.stateT > 2.6) this.showBonusResults(); break; }
         const b = this.winBalloon, p = this.player;
         if (b) { p.x = b.cx - p.w / 2 - 10; p.y = b.bottom - 30 - p.h; p.t += 0; this.pickle.x = b.cx + 4; this.pickle.y = b.bottom - 30 - 46; this.pickle.mode = 'win'; this.pickle.face = -1; this.pickle.rot = 0; this.pickle.pose = 'cheer'; }
@@ -415,6 +416,14 @@ const G = window.__G = {
     }
     // fake (secret) tiles in front
     if (this.fakeTiles.length) drawFakeTiles(ctx, this, this.fakeAlpha);
+    // World 2: darkness of the kiwi caves, the storm on the flagship
+    if (this.theme.dark) {
+      const L = [{ x: this.player.cx, y: this.player.cy, r: this.lightR || 170 }, { x: this.pickle.cx, y: this.pickle.cy, r: 80 }];
+      for (const e of this.ents) if (e.alive && e.light) L.push({ x: e.cx, y: e.cy, r: e.light });
+      drawDarkness(ctx, this, L);
+      ctx.setTransform(S, 0, 0, S, -cx * S, -cy * S);
+    }
+    if (this.theme.rain) { ctx.setTransform(S, 0, 0, S, 0, 0); drawRain(ctx, this); ctx.setTransform(S, 0, 0, S, -cx * S, -cy * S); }
     // bubbles
     this.pickle.drawBubble(ctx, this);
     if (this.npcBubble) drawWorldBubble(ctx, this, this.npcBubble.ent.fx + 4, this.npcBubble.ent.fy - 120, this.npcBubble.text, Math.min(1, this.npcBubble.t * 3), '#9a6a2a');
@@ -943,7 +952,7 @@ const UI = {
     this.focus = 0; this.paint();
   },
   dialog(lines, done) {
-    const names = { misha: 'Морковка Миша', pickle: 'Пикль', banni: 'Банни', kroshka: 'Крошка', baron: 'Барон Брюссель', pupyrka: 'Сестричка Пупырка' };
+    const names = { misha: 'Морковка Миша', pickle: 'Пикль', banni: 'Банни', kroshka: 'Крошка', baron: 'Барон Брюссель', pupyrka: 'Сестричка Пупырка', zelenets: 'Дядя Зеленец', kabachok: 'Кузен Кабачок', grandma: 'Бабушка Корнишон', vinegar: 'Капитан Уксус', vinegarSweet: 'Капитан Уксус', banniMom: 'Мама Банни', banniDad: 'Папа Банни' };
     let k = 0;
     const show = () => {
       const L = lines[k];

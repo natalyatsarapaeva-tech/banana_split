@@ -158,6 +158,8 @@ function drawRindTile(g, x, y, c, r) { // coconut-shell / fruit-rind wall that t
 
 // ---------- power-up icons ----------
 function drawPowerIconW2(g, kind, t) {
+  if (kind === 'lantern') { g.scale(0.7, 0.7); drawKiwiLamp(g, 0, 0, t || 0); return; }
+  if (kind === 'syrup') { drawSyrupBomb(g, 0, 2, t || 0); return; }
   if (kind === 'helmet') {
     g.beginPath(); g.arc(0, 3, 13, Math.PI, 0); g.closePath();
     const gr = g.createLinearGradient(0, -10, 0, 4); gr.addColorStop(0, '#9a6a3a'); gr.addColorStop(1, '#5a3618'); fs(g, gr, '#3a200a', 1.8);
@@ -383,7 +385,7 @@ function drawPineRindTile(g, x, y, c, r) { // pineapple-skin wall
 }
 function drawW2Portrait(g, who) {
   if (who === 'pupyrka') { drawPupyrka(g, 75, 150, { t: 0, s: 2.6, happy: false }); return true; }
-  return false;
+  return typeof drawW2Portrait2 === 'function' && drawW2Portrait2(g, who);
 }
 
 // ---------- 2-3 Watermelon reef (ref-reef.jpg, ref-boss.jpg) ----------

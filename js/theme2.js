@@ -17,7 +17,7 @@ function drawDynamicTiles(ctx, G, cx, cy, front) {
   for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
     const tt = L.get(c, r);
     if (isLiquidT(tt)) {
-      const col = tt === TL.BROTH ? ['rgba(222,150,40,0.93)', '#ffd06a', 'rgba(222,150,40,0.55)'] : ['rgba(84,42,18,0.92)', '#a0623a', 'rgba(96,50,22,0.55)'];
+      const col = tt === TL.BROTH ? (th.brothCol || ['rgba(222,150,40,0.93)', '#ffd06a', 'rgba(222,150,40,0.55)']) : ['rgba(84,42,18,0.92)', '#a0623a', 'rgba(96,50,22,0.55)'];
       const x = c * T, y = r * T;
       const top = !isLiquidT(L.get(c, r - 1));
       if (front) {

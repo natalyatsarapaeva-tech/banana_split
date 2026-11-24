@@ -181,7 +181,7 @@ function groundBelow(G, x, y) { // is there something to stand on at point
 class Camera {
   constructor() { this.x = 0; this.y = 0; this.look = 0; this.minX = 0; this.maxX = 1e9; this.shake = 0; this.sx = 0; this.sy = 0; this.lockY = null; }
   reset(G, p) {
-    this.minX = 0; this.maxX = G.level.W * T - G.viewW; this.look = 0;
+    this.minX = 0; this.maxX = G.level.W * T - G.viewW; this.look = 0; this.minY = 0;
     this.x = clamp(p.x + p.w / 2 - G.viewW * 0.4, this.minX, this.maxX);
     this.y = clamp(p.y - VIEW_H * 0.55, 0, G.level.H * T - VIEW_H);
   }
@@ -203,7 +203,7 @@ class Camera {
       if (want > this.y + 50) ty = want - 50;
       if (p.onGround || p.state === 'vine') ty = lerp(ty, want, 0.08);
     }
-    ty = clamp(ty, 0, Math.max(0, levelH - VIEW_H));
+    ty = clamp(ty, Math.min(0, this.minY || 0), Math.max(0, levelH - VIEW_H)); // minY < 0 lets a boss arena at the top of a level sit low in the view
     this.y = lerp(this.y, ty, 1 - Math.pow(0.002, dt));
     if (this.shake > 0) { this.shake = Math.max(0, this.shake - dt); const m = this.shake * 18; this.sx = rnd(-m, m); this.sy = rnd(-m, m); }
     else { this.sx = this.sy = 0; }

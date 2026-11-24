@@ -870,7 +870,7 @@ class Pickup extends Ent {
   update(G, dt) {
     this.t += dt;
     if (this.rise > 0) { this.rise = Math.max(0, this.rise - dt * 2.2); this.y = lerp(this.baseY, this.startY, this.rise); return; }
-    if (overlap(this, G.player) && (G.player.state === 'play' || G.player.state === 'vine')) this.collect(G);
+    if (overlap(this, G.player) && (G.player.state === 'play' || G.player.state === 'vine' || G.player.state === 'balloon')) this.collect(G);
   }
   collect(G) {
     const p = G.player; this.alive = false;

@@ -192,9 +192,9 @@ class GarlicAirship extends Enemy {
       this.bombT -= dt;
       if (this.bombT <= 0) {
         const n = this.hp <= 2 ? 3 : this.hp <= 3 ? 2 : 1;
-        for (let i = 0; i < n; i++) { const tx = p.cx - this.gx, tt = 1.6 + i * 0.25; G.add(new GarlicBomb(this.gx - 30, this.gy + 50, tx / tt, -140 - i * 60)); }
+        for (let i = 0; i < n; i++) { const tx = p.cx - this.gx, tt = 1.6 + i * 0.25; G.add(new (this.Bomb || GarlicBomb)(this.gx - 30, this.gy + 50, tx / tt, -140 - i * 60)); }
         this.bombT = this.hp <= 2 ? 1.7 : 2.1; Audio2.play('pop');
-        if (this.hp <= 3 && Math.random() < 0.5) G.add(new StinkCloud(this.gx - 60, this.gy + 20));
+        if (this.hp <= 3 && Math.random() < 0.5 && !this.noStink) G.add(new StinkCloud(this.gx - 60, this.gy + 20));
       }
     } else if (this.st === 'dead') {
       this.timer -= dt; this.gy += 60 * dt; this.tilt = (this.tilt || 0) + dt * 0.4;

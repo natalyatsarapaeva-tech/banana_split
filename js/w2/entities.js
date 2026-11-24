@@ -134,6 +134,8 @@ function collectW2(G, pk, p) {
       break;
     case 'helmet': p.helmet = true; Audio2.play('power'); G.add(new TextFx(pk.cx, pk.y, 'Кокосовый шлем!', '#ffe0b0')); G.hint('helmet', 'Кокосовый шлем! Он выдержит один удар, а головой в нём можно разбивать корку и кирпичи.'); break;
     case 'armor': p.armor = true; Audio2.play('power'); G.add(new TextFx(pk.cx, pk.y, 'Ананасовая броня!', '#fff0a0')); G.hint('armor', 'Ананасовая броня! Враги, которые тебя коснутся, сами уколются. Держится до первого удара.'); break;
+    case 'lantern': G.lightR = 260; Audio2.play('power'); G.add(new TextFx(pk.cx, pk.y, 'Фонарь-киви!', '#d8ff9a')); G.hint('lantern', 'Фонарь-киви! Теперь вокруг светлее.'); break;
+    case 'syrup': p.power = 'syrup'; Audio2.play('power'); G.add(new TextFx(pk.cx, pk.y, 'Сироп-бомба!', '#ffe8a0')); G.hint('syrup', `Бомбы с сахарным сиропом! Жми ${Input.label('fire')} — бросай их в Уксуса.`); break;
     case 'flipper': p.power = 'flipper'; Audio2.play('power'); G.add(new TextFx(pk.cx, pk.y, 'Лаймонный ласт!', '#d8ff9a')); G.hint('flipper', `Лаймонный ласт! В воде жми ${Input.label('fire')} — рывок, он пробивает медуз и бочки.`); break;
   }
 }
