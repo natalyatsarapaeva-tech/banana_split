@@ -283,6 +283,15 @@ const G = window.__G = {
       this.cam.y = lerp(this.cam.y, a.camY, 0.1);
       if (this.cam.shake > 0) { this.cam.shake = Math.max(0, this.cam.shake - dt); const m = this.cam.shake * 18; this.cam.sx = rnd(-m, m); this.cam.sy = rnd(-m, m); } else { this.cam.sx = this.cam.sy = 0; }
     } else if (p.state !== 'win') this.cam.update(this, p, dt);
+    // during a boss fight the hero stays inside the arena, and the camera never loses the hero
+    const arn = this.def.arena;
+    if (this.bossActive && arn && !this.def.airBoss && (p.state === 'play' || p.state === 'vine')) {
+      if (p.x < arn.x0) { p.x = arn.x0; if (p.vx < 0) p.vx = 0; }
+      if (p.x + p.w > arn.x1) { p.x = arn.x1 - p.w; if (p.vx > 0) p.vx = 0; }
+      const cam = this.cam, need = p.cx - this.viewW + 60;
+      if (cam.x < need) { cam.maxX = Math.max(cam.maxX, need); cam.x = need; }
+      if (cam.x > p.cx - 60) { cam.minX = Math.min(cam.minX, p.cx - 60); cam.x = p.cx - 60; }
+    }
   },
   step(dt) {
     this.stateT += dt;
