@@ -6070,19 +6070,48 @@ const Touch = {
   el: document.getElementById('touch'), visible: false,
   init() {
     const dpad = this.el.querySelector('.dpad');
-    const zones = new Map();
-    const setDir = () => { let l = false, r = false, d = false, u = false; for (const z of zones.values()) { if (z === 'l') l = true; if (z === 'r') r = true; if (z === 'd') d = true; if (z === 'u') u = true; if (z === 'ld') { l = true; d = true; } if (z === 'rd') { r = true; d = true; } } Input.touch.left = l; Input.touch.right = r; Input.touch.down = d; Input.touch.up = u; dpad.dataset.l = l; dpad.dataset.r = r; dpad.dataset.d = d; dpad.dataset.u = u; };
+    const btns = [...this.el.querySelectorAll('[data-act]')];
+    // Who is pressing what. Keys are 't<id>' for fingers (Touch Events) and 'p<id>' for mouse/pen.
+    // Fingers are re-checked against the list of touches that are really on the screen on every
+    // touch event, so a lost 'touchend' (iOS, system gestures, several fingers) can't leave a button stuck.
+    const zones = new Map(), presses = new Map();
     const zoneOf = (e) => { const b = dpad.getBoundingClientRect(); const x = (e.clientX - b.left) / b.width, y = (e.clientY - b.top) / b.height; if (x < 0.34) return y > 0.78 ? 'ld' : 'l'; if (x > 0.66) return y > 0.78 ? 'rd' : 'r'; return y < 0.5 ? 'u' : 'd'; };
-    dpad.addEventListener('pointerdown', e => { e.preventDefault(); Audio2.unlock(); Input.lastDevice = 'touch'; try { dpad.setPointerCapture(e.pointerId); } catch (_) { } zones.set(e.pointerId, zoneOf(e)); setDir(); });
-    dpad.addEventListener('pointermove', e => { if (zones.has(e.pointerId)) { zones.set(e.pointerId, zoneOf(e)); setDir(); } });
-    const up = e => { zones.delete(e.pointerId); setDir(); };
-    dpad.addEventListener('pointerup', up); dpad.addEventListener('pointercancel', up); dpad.addEventListener('lostpointercapture', up);
-    this.el.querySelectorAll('[data-act]').forEach(b => {
-      const act = b.dataset.act; const ids = new Set();
-      b.addEventListener('pointerdown', e => { e.preventDefault(); Audio2.unlock(); Input.lastDevice = 'touch'; try { b.setPointerCapture(e.pointerId); } catch (_) { } ids.add(e.pointerId); Input.touch[act] = true; Input.latch['touch:' + act] = true; b.classList.add('on'); });
-      const off = e => { ids.delete(e.pointerId); if (!ids.size) { Input.touch[act] = false; b.classList.remove('on'); } };
-      b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('lostpointercapture', off);
+    const apply = () => {
+      let l = false, r = false, d = false, u = false;
+      for (const z of zones.values()) { if (z === 'l' || z === 'ld') l = true; if (z === 'r' || z === 'rd') r = true; if (z === 'd' || z === 'ld' || z === 'rd') d = true; if (z === 'u') u = true; }
+      Input.touch.left = l; Input.touch.right = r; Input.touch.down = d; Input.touch.up = u;
+      dpad.dataset.l = l; dpad.dataset.r = r; dpad.dataset.d = d; dpad.dataset.u = u;
+      const on = new Set(presses.values());
+      for (const b of btns) { const a = b.dataset.act, v = on.has(a); Input.touch[a] = v; b.classList.toggle('on', v); }
+    };
+    this.release = () => { zones.clear(); presses.clear(); apply(); };
+    const sync = (e) => {
+      const live = new Set(); for (const t of e.touches) live.add('t' + t.identifier);
+      for (const k of [...zones.keys()]) if (k[0] === 't' && !live.has(k)) zones.delete(k);
+      for (const k of [...presses.keys()]) if (k[0] === 't' && !live.has(k)) presses.delete(k);
+      for (const t of e.touches) { const k = 't' + t.identifier; if (zones.has(k)) zones.set(k, zoneOf(t)); }
+      apply();
+    };
+    const begin = () => { Audio2.unlock(); Input.lastDevice = 'touch'; };
+    dpad.addEventListener('touchstart', e => { e.preventDefault(); begin(); for (const t of e.changedTouches) zones.set('t' + t.identifier, zoneOf(t)); sync(e); }, { passive: false });
+    for (const b of btns) b.addEventListener('touchstart', e => {
+      e.preventDefault(); begin(); const a = b.dataset.act;
+      for (const t of e.changedTouches) presses.set('t' + t.identifier, a);
+      Input.latch['touch:' + a] = true; sync(e);
+    }, { passive: false });
+    for (const ev of ['touchmove', 'touchend', 'touchcancel']) document.addEventListener(ev, sync, { passive: true });
+    // mouse / pen (e.g. "Сенсорные кнопки: вкл" on a computer)
+    const pDown = (el, f) => el.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'touch') return; e.preventDefault(); begin();
+      try { el.setPointerCapture(e.pointerId); } catch (_) { } f('p' + e.pointerId, e); apply();
     });
+    pDown(dpad, (k, e) => zones.set(k, zoneOf(e)));
+    dpad.addEventListener('pointermove', e => { const k = 'p' + e.pointerId; if (zones.has(k)) { zones.set(k, zoneOf(e)); apply(); } });
+    for (const b of btns) pDown(b, k => { presses.set(k, b.dataset.act); Input.latch['touch:' + b.dataset.act] = true; });
+    const pUp = e => { const k = 'p' + e.pointerId; zones.delete(k); presses.delete(k); apply(); };
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) { dpad.addEventListener(ev, pUp); for (const b of btns) b.addEventListener(ev, pUp); }
+    window.addEventListener('blur', () => this.release());
+    document.addEventListener('visibilitychange', () => { if (document.hidden) this.release(); });
     this.el.querySelector('.tpause').addEventListener('pointerdown', e => { e.preventDefault(); G.pause(); });
     this.el.addEventListener('contextmenu', e => e.preventDefault());
     canvas.addEventListener('pointerdown', e => {
@@ -6097,7 +6126,7 @@ const Touch = {
     const want = (s === 'on' || (s === 'auto' && IS_TOUCH)) && (G.state === 'play' || G.state === 'levelIntro');
     this.visible = want;
     this.el.classList.toggle('on', want);
-    if (!want) for (const k in Input.touch) Input.touch[k] = false;
+    if (!want) { if (this.release) this.release(); for (const k in Input.touch) Input.touch[k] = false; }
     const fire = this.el.querySelector('[data-act="fire"]');
     if (fire) fire.style.visibility = (G.player && ((G.player.power === 'cherry' || G.player.power === 'mint') && G.player.char === 'banni' || G.player.state === 'balloon')) ? 'visible' : 'hidden';
     const sw = this.el.querySelector('[data-act="swap"]');
