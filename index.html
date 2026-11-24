@@ -15,6 +15,7 @@ body{font-family:Nunito,'Trebuchet MS',system-ui,sans-serif}
 #stage{position:absolute;overflow:hidden;--u:1;border-radius:4px;box-shadow:0 0 40px rgba(0,0,0,.45)}
 #game{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
 #ui{position:absolute;inset:0;color:#5a2c12}
+#ui:empty{pointer-events:none}
 .scr{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;animation:fade .25s ease}
 .scr.dim{background:rgba(43,20,32,.45)}
 @keyframes fade{from{opacity:0}to{opacity:1}}
@@ -169,7 +170,8 @@ const KEYMAP = {
   left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'],
   jump: ['Space', 'KeyZ', 'ArrowUp', 'KeyW'], jumpBtn: ['Space', 'KeyZ'],
   fire: ['KeyX', 'KeyJ', 'ShiftLeft', 'ShiftRight'], pickle: ['KeyC', 'KeyK'], swap: ['KeyV', 'KeyQ'],
-  pause: ['Escape', 'KeyP'], confirm: ['Enter', 'Space', 'KeyZ', 'NumpadEnter'], back: ['Escape', 'Backspace']
+  pause: ['Escape', 'KeyP'], confirm: ['Enter', 'Space', 'KeyZ', 'NumpadEnter'], back: ['Escape', 'Backspace'],
+  skip: ['Enter', 'NumpadEnter']
 };
 const ACTIONS = Object.keys(KEYMAP);
 const Input = {
@@ -190,8 +192,8 @@ const Input = {
   },
   rawHeld(a) {
     for (const c of KEYMAP[a]) if (this.keys[c] || this.latch[c]) return true;
-    if (this.touch[a] || this.padState[a]) return true;
-    if (a === 'jumpBtn' && (this.touch.jump || this.padState.jump)) return true;
+    if (this.touch[a] || this.padState[a] || this.latch['touch:' + a]) return true;
+    if (a === 'jumpBtn' && (this.touch.jump || this.padState.jump || this.latch['touch:jump'])) return true;
     if (a === 'confirm' && (this.padState.jump)) return true;
     return false;
   },
@@ -208,7 +210,7 @@ const Input = {
       ps.left = ps.left || b(14) || ax < -0.4; ps.right = ps.right || b(15) || ax > 0.4;
       ps.up = ps.up || b(12) || ay < -0.6; ps.down = ps.down || b(13) || ay > 0.6;
       ps.jump = ps.jump || b(0); ps.fire = ps.fire || b(2) || b(1); ps.pickle = ps.pickle || b(3);
-      ps.pause = ps.pause || b(9); ps.back = ps.back || b(1); ps.swap = ps.swap || b(5) || b(4);
+      ps.pause = ps.pause || b(9); ps.skip = ps.skip || b(8); ps.back = ps.back || b(1); ps.swap = ps.swap || b(5) || b(4);
     }
   },
   // call once per fixed step
@@ -228,7 +230,8 @@ const Input = {
       down: d === 'touch' ? '▼' : d === 'pad' ? '↓' : '↓',
       fire: d === 'touch' ? '🍒' : d === 'pad' ? 'X' : 'X',
       pickle: d === 'touch' ? '🥒' : d === 'pad' ? 'Y' : 'C',
-      swap: d === 'touch' ? '⇄' : d === 'pad' ? 'RB' : 'V'
+      swap: d === 'touch' ? '⇄' : d === 'pad' ? 'RB' : 'V',
+      skip: d === 'touch' ? 'Коснись, чтобы закрыть' : d === 'pad' ? 'Select — закрыть' : 'Enter — закрыть'
     };
     return L[kind] || kind;
   }
@@ -3012,6 +3015,14 @@ class Pickle extends Ent {
     if (this.sayT > 0.6) { if (this.queue.length < 3 && !this.queue.includes(text)) this.queue.push(text); return; }
     this.say = text; this.sayT = dur || Math.max(4.5, text.length * 0.065);
   }
+  // close the current bubble; the next queued line, if any, shows right away
+  dismiss() {
+    if (!this.say || this.sayT <= 0) return false;
+    const n = this.queue.shift();
+    if (n) { this.say = n; this.sayT = Math.max(4.5, n.length * 0.065); } else { this.say = null; this.sayT = 0; }
+    return true;
+  }
+  hitBubble(px, py) { const r = this.bubbleRect; return !!(r && this.say && this.sayT > 0 && px >= r.x - 16 && px <= r.x + r.w + 16 && py >= r.y - 16 && py <= r.y + r.h + 16); }
   throwIt(G) {
     const p = G.player;
     if (this.asBanni || this.mode !== 'follow' || this.cd > 0 || p.state !== 'play') return;
@@ -3079,12 +3090,13 @@ class Pickle extends Ent {
     drawPickle(g, { x: this.cx, y: this.bottom, face: this.face, pose: this.pose, phase: this.phase, t: this.t, rot: this.mode === 'follow' ? 0 : this.rot, worried: G.boss && G.boss.alive, wings: G.theme.id === 3 && (this.pose === 'jump' || this.mode !== 'follow') });
   }
   drawBubble(g, G) {
-    if (!this.say || this.sayT <= 0) return;
+    if (!this.say || this.sayT <= 0) { this.bubbleRect = null; return; }
     const a = Math.min(1, this.sayT * 3, (this.say ? 1 : 0));
     g.save(); g.globalAlpha = a;
     g.font = '800 15px Nunito, sans-serif';
     const lines = wrapText(g, this.say, 250);
-    const lh = 19, w = Math.min(270, Math.max(...lines.map(l => g.measureText(l).width)) + 22), h = lines.length * lh + 14;
+    const skip = Input.label('skip');
+    const lh = 19, w = Math.min(270, Math.max(...lines.map(l => g.measureText(l).width), 150) + 22), h = lines.length * lh + 14 + 15;
     const an = (G.player && G.player.char === 'pickle') ? G.player : (G.player && G.player.state === 'balloon') ? G.player : this;
     let bx = clamp(an.cx - w / 2, G.cam.x + 6, G.cam.x + G.viewW - w - 6);
     let by = an.y - h - 22;
@@ -3095,6 +3107,9 @@ class Pickle extends Ent {
     g.beginPath(); g.moveTo(tx - 7, by + h); g.lineTo(tx + 1, by + h + 11); g.lineTo(tx + 7, by + h); g.strokeStyle = '#3d7f2c'; g.lineWidth = 2.5; g.stroke();
     g.fillStyle = '#244d18'; g.textAlign = 'left'; g.textBaseline = 'top';
     lines.forEach((l, i) => g.fillText(l, bx + 11, by + 8 + i * lh));
+    g.font = '800 11px Nunito, sans-serif'; g.fillStyle = 'rgba(36,77,24,0.55)'; g.textAlign = 'right';
+    g.fillText(skip + '  ✕', bx + w - 10, by + h - 17);
+    const m = g.getTransform(); this.bubbleRect = { x: m.a * bx + m.e, y: m.d * by + m.f, w: m.a * w, h: m.d * h };
     g.restore();
   }
 }
@@ -5377,6 +5392,7 @@ const G = window.__G = {
         break;
       case 'play':
         if (Input.pressed('pause')) { this.pause(); break; }
+        if (Input.pressed('skip') && this.pickle) this.pickle.dismiss();
         this.worldUpdate(dt);
         break;
       case 'win': {
@@ -6063,12 +6079,18 @@ const Touch = {
     dpad.addEventListener('pointerup', up); dpad.addEventListener('pointercancel', up); dpad.addEventListener('lostpointercapture', up);
     this.el.querySelectorAll('[data-act]').forEach(b => {
       const act = b.dataset.act; const ids = new Set();
-      b.addEventListener('pointerdown', e => { e.preventDefault(); Audio2.unlock(); Input.lastDevice = 'touch'; try { b.setPointerCapture(e.pointerId); } catch (_) { } ids.add(e.pointerId); Input.touch[act] = true; b.classList.add('on'); });
+      b.addEventListener('pointerdown', e => { e.preventDefault(); Audio2.unlock(); Input.lastDevice = 'touch'; try { b.setPointerCapture(e.pointerId); } catch (_) { } ids.add(e.pointerId); Input.touch[act] = true; Input.latch['touch:' + act] = true; b.classList.add('on'); });
       const off = e => { ids.delete(e.pointerId); if (!ids.size) { Input.touch[act] = false; b.classList.remove('on'); } };
       b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('lostpointercapture', off);
     });
     this.el.querySelector('.tpause').addEventListener('pointerdown', e => { e.preventDefault(); G.pause(); });
     this.el.addEventListener('contextmenu', e => e.preventDefault());
+    canvas.addEventListener('pointerdown', e => {
+      if (G.state !== 'play' || !G.pickle) return;
+      const r = canvas.getBoundingClientRect();
+      const px = (e.clientX - r.left) * canvas.width / r.width, py = (e.clientY - r.top) * canvas.height / r.height;
+      if (G.pickle.hitBubble(px, py)) { e.preventDefault(); G.pickle.dismiss(); }
+    });
   },
   update() {
     const s = Save.data.settings.touch;
