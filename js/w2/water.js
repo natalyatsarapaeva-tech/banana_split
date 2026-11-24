@@ -80,8 +80,10 @@ Object.assign(Player.prototype, {
     this.underwater = this.y + 10 > surf;
     this.updateAir(G, dt);
     if (this.state !== 'play') return true;
+    const lift = typeof liftAt === 'function' && liftAt(G, this.cx, this.cy);
     if (this.char === 'pickle') {
       this.swimming = false;
+      if (lift) { this.vy = Math.min(this.vy, -330); this.onGround = false; this.standOn = null; }
       // a strong kick out of the water when the head is at the surface
       if (!this.onGround && this.y < surf + 14 && this.jumpBuf > 0) { this.vy = -WATER.leap * 0.85; this.jumpBuf = 0; this.cutOk = true; Audio2.play('splash'); G.burst(this.cx, surf, 8, ['#ffffff', '#bff4ff']); }
       return false;
@@ -99,6 +101,7 @@ Object.assign(Player.prototype, {
     else if (Input.held('up') && this.y > rest + 4) ay = -560;
     else ay = this.y < rest ? 900 : -320;
     this.vy = clamp(this.vy + ay * dt, -330, 280);
+    if (liftAt(G, this.cx, this.cy)) this.vy = Math.min(this.vy, -330);
     if (!Input.held('down') && Math.abs(this.y - rest) < 12) this.vy *= Math.pow(0.03, dt);
     if (this.jumpBuf > 0) {
       this.jumpBuf = 0;
@@ -110,6 +113,13 @@ Object.assign(Player.prototype, {
     this.prevBottom = this.bottom;
     moveBody(this, G, dt);
     if (cur) { if (!this.hitL && !this.hitR) this.vx = vx0; this.vy = vy0; }
+    // bumping the head while swimming up: blocks give their contents, a coconut helmet breaks rind/shells
+    this.bumpCd = (this.bumpCd || 0) - dt;
+    if (this.hitCeil && this.bumpCd <= 0) {
+      this.bumpCd = 0.35;
+      if (this.ceilEnt && this.ceilEnt.hit) this.ceilEnt.hit(G, this); else if (!(this.helmet && this.headBreak(G))) Audio2.play('bump');
+      this.vy = Math.max(this.vy, 60);
+    }
     this.phase += dt * 9;
     if (this.underwater && Math.random() < 0.05) G.parts.push({ k: 'dust', x: this.cx + this.face * 10, y: this.y + 6, vx: rnd(-10, 10), vy: -60, life: 0.9, max: 0.9, c: 'rgba(255,255,255,0.75)', s: rnd(2, 4), g: 0 });
     if (this.bottom > G.level.H * T - 4) { this.y = G.level.H * T - 4 - this.h; this.vy = Math.min(0, this.vy); }

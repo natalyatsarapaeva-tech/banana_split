@@ -45,7 +45,7 @@ const G = window.__G = {
   drip(x, y, c) { this.parts.push({ k: 'bit', x, y, vx: 0, vy: 40, life: 0.6, max: 0.6, c, s: 3, r: 0, g: 900 }); },
   crownBounce(x, y) { for (let i = 0; i < 6; i++) this.parts.push({ k: 'dust', x: x + rnd(-16, 16), y: y + 4, vx: rnd(-90, 90), vy: rnd(-90, -20), life: 0.5, max: 0.5, c: pick(['#ffd6e8', '#d6efff', '#ebdcff']), s: rnd(4, 8), g: 0 }); },
   shake(t) { this.cam.shake = Math.max(this.cam.shake, t); },
-  clearBossShots() { for (const e of this.ents) if (e.alive && (e instanceof Leaf || e instanceof Tear || e instanceof OnionRing)) { e.alive = false; this.burst(e.cx, e.cy, 3, ['#ffffff']); } },
+  clearBossShots() { for (const e of this.ents) if (e.alive && (e instanceof Leaf || e instanceof Tear || e instanceof OnionRing || e.bossShot)) { e.alive = false; this.burst(e.cx, e.cy, 3, ['#ffffff']); } },
   mercy(ar) {
     const p = this.player; if (p.hp >= p.maxHp) return;
     if (this.ents.some(e => e.alive && e instanceof Pickup && e.kind === 'ice')) return;
@@ -151,7 +151,7 @@ const G = window.__G = {
     Audio2.setRate(d.bossRate);
     this.toast(this.boss.name + '!');
     const H = { 1: 'Капитан Кочан! Не попадайся под него, перепрыгивай. Жди, пока врежется в стену!', 2: 'Луковый Дух! Прыгай ему на голову, когда он выдохнется после рывка, или подлетай с крон.', 4: 'Королева Холодец! Уворачивайся от прыжков, а когда она затрясётся — на корону!' };
-    if (H[this.levelId]) this.hint('boss' + this.levelId, H[this.levelId]);
+    if (d.bossHint || H[this.levelId]) this.hint('boss' + this.levelId, d.bossHint || H[this.levelId]);
   },
   bossDefeated(boss) {
     this.bossActive = false; Audio2.setRate(this.musicRate);
@@ -161,6 +161,7 @@ const G = window.__G = {
     const arB = this.def.arena; if (arB) for (const e of this.ents) if (e.alive && e.enemy && !e.boss && e.cx > arB.x0 - 40 && e.cx < arB.x1 + 40) { e.alive = false; this.add(new Poof(e.cx, e.cy, null)); }
     this.shake(0.4);
     this.clearBossShots();
+    if (this.def.onBossDefeated) { this.def.onBossDefeated(this, boss); return; }
     if (this.def.wallJumpAfter) {
       Save.data.wallJump = true; Save.save();
       if (this.def.exitGate) this.def.exitGate.open();
@@ -200,7 +201,7 @@ const G = window.__G = {
       this.bossActive = false; this.boss.reset();
       for (const g of d.gates) { g.closed = false; g.solid = null; g.k = 0; }
       if (!d.airBoss) this.add(new BossTrigger(d.arena.x0 + 2 * T));
-      for (const e of this.ents) if (e instanceof Leaf || e instanceof Tear || e instanceof OnionRing || e instanceof GarlicBomb || e instanceof BrothBlob || e instanceof StinkCloud || e instanceof ToastPlat) e.alive = false;
+      for (const e of this.ents) if (e instanceof Leaf || e instanceof Tear || e instanceof OnionRing || e instanceof GarlicBomb || e instanceof BrothBlob || e instanceof StinkCloud || e instanceof ToastPlat || e.bossShot) e.alive = false;
       Audio2.setRate(this.musicRate);
     }
     this.flood = null;
@@ -504,7 +505,7 @@ const HUD = {
       this.text(g, b.name, W / 2, by - 6, 16, '#5a2c12', 'center');
       rrect(g, bx, by + 6, bw, 12, 6); fs(g, 'rgba(90,40,20,0.25)');
       const k = Math.max(0, b.hp) / b.maxHp;
-      if (k > 0) { rrect(g, bx, by + 6, bw * k, 12, 6); fs(g, b instanceof OnionGhost ? '#b27ad6' : '#7ac04a'); }
+      if (k > 0) { rrect(g, bx, by + 6, bw * k, 12, 6); fs(g, b.barColor || (b instanceof OnionGhost ? '#b27ad6' : '#7ac04a')); }
       for (let i = 1; i < b.maxHp; i++) line(g, bx + bw * i / b.maxHp, by + 6, bx + bw * i / b.maxHp, by + 18, 'rgba(255,255,255,0.8)', 2);
     }
     // toasts

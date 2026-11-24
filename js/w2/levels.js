@@ -6,7 +6,7 @@
 const W2_LEVELS = [
   { id: '2-1', num: '2-1', name: 'Пляж Кокосовой Стружки', node: [235, 250], sheep: 3, notes: 'w2-1:', thumb: 'assets/w2/thumb1.jpg' },
   { id: '2-2', num: '2-2', name: 'Ананасовые Джунгли', node: [545, 215], sheep: 3, notes: 'w2-2:', thumb: 'assets/w2/thumb2.jpg' },
-  { id: '2-3', num: '2-3', name: 'Арбузный Риф', node: [520, 395], sheep: 2, notes: 'w2-3:', soon: true },
+  { id: '2-3', num: '2-3', name: 'Арбузный Риф', node: [520, 395], sheep: 2, notes: 'w2-3:', thumb: 'assets/w2/thumb3.jpg' },
   { id: '2-4', num: '2-4', name: 'Манговые Водопады', node: [830, 250], soon: true },
   { id: '2-5', num: '2-5', name: 'Вулкан Горячего Джема', node: [1110, 230], soon: true },
   { id: '2-6', num: '2-6', name: 'Лимонадное Море', node: [655, 400], soon: true },
@@ -36,7 +36,9 @@ Object.assign(NOTES, {
   'w2-1:a': 'Пикль, внучок! Если письмо дойдёт — знай: мы держимся. В банке тесно, но мы поём песни про укроп. Уксус плывёт к Ананасовым Джунглям. — Бабушка Корнишон',
   'w2-1:b': 'Помнишь, как ты в детстве разбивал плечом бочки с огурцами? Этот Хруст у тебя от дедушки. Пригодится! Целую в пупырышки. — Бабушка',
   'w2-2:a': 'Пикль! Нас везут мимо Ананасовых Джунглей. Пупырку Уксус оставил в лагере — сторожить кладовую с банками. Найди её! — Бабушка Корнишон',
-  'w2-2:b': 'Пиратские оливки скользкие — сверху их не возьмёшь. Твой дедушка говорил: «Не можешь перепрыгнуть — пробей!» — Бабушка'
+  'w2-2:b': 'Пиратские оливки скользкие — сверху их не возьмёшь. Твой дедушка говорил: «Не можешь перепрыгнуть — пробей!» — Бабушка',
+  'w2-3:a': 'Пикль, нас везут мимо Арбузного рифа. Его сторожит Осьминог Маринад: банки с рассолом он держит в щупальцах. Разбей банки — и он ослабеет! — Бабушка',
+  'w2-3:b': 'Под водой дыши через раз, как учил дедушка, и лови пузырьки газировки — они сладкие. Целую в пупырышки! — Бабушка Корнишон'
 });
 
 // ---------- helpers ----------
@@ -218,6 +220,69 @@ function buildW2L2() {
     start: { x: X(3), y: Y(G) }, sheep: 3
   });
 }
+// ---------- 2-3 Watermelon reef (fully under water; boss: Octopus Marinade) ----------
+function buildW2L3() {
+  const b = new LB(220, 26), H = 26, F = 22, OPEN = Y(3) + 20, ROOF = Y(5), AR = 11; // floor row, open surface, roof bottom, arena roof
+  const weed = (c, h, k) => b.decoBack.push({ k: 'weed', x: X(c), y: Y(F) + 4, h, c: k || 0 });
+  const coral = (c, s, k) => b.decoBack.push({ k: 'coral', x: X(c), y: Y(F) + 6, s: s || 1, c: k });
+  b.fill(0, F, 219, H - 1, TL.SOLID);
+  // water: open stretches reach the air, under the reef roof the water fills up to the rock
+  sea(b, 0, 20, OPEN, { amp: 3, period: 4 }); sea(b, 21, 60, ROOF); sea(b, 61, 66, OPEN, { amp: 3, period: 4 }); sea(b, 67, 110, ROOF);
+  sea(b, 111, 115, OPEN, { amp: 3, period: 4 }); sea(b, 116, 175, ROOF); sea(b, 176, 205, Y(AR)); sea(b, 206, 219, OPEN, { amp: 3, period: 4 });
+  b.fill(21, 0, 60, 4, TL.SOLID); b.fill(67, 0, 110, 4, TL.SOLID); b.fill(116, 0, 175, 4, TL.SOLID); b.fill(176, 0, 205, AR - 1, TL.SOLID);
+  b.fill(219, 0, 219, H - 1, TL.SOLID);
+  // A: the descent
+  b.fill(0, 3, 6, F - 1, TL.SOLID);
+  b.decoBack.push({ k: 'boat', x: X(3), y: Y(3) - 2 });
+  b.hint(1, 'w23-start', () => `Арбузный риф! Тут почти всё под водой. Следи за воздухом над головой и лови пузырьки. В раковине на дне — Лаймонный ласт: в воде жми ${Input.label('fire')}.`);
+  b.decoBack.push({ k: 'clam', x: X(12), y: Y(F) + 2 }); b.item('flipper', 12, F - 2);
+  b.add(new SodaVent(X(17), Y(F))); weed(9, 110, 0); weed(15, 80, 1); coral(20, 1.2); weed(25, 130, 2); coral(29, 0.9, 1);
+  b.add(new CrabCaper(X(23), Y(F))); b.add(new JarKid(X(27), Y(F), 0));
+  b.item('note', 30, F - 1, { id: 'w2-3:a' }); b.drops(8, 10, 5, 0); b.drops(14, 17, 4, 0);
+  // B: jellyfish maze under the reef roof; a cherry behind a fake coral wall
+  pillar(b, 36, 37, 15); b.fill(42, 5, 43, 13, TL.SOLID); pillar(b, 48, 49, 14); b.fill(54, 5, 55, 12, TL.SOLID);
+  for (const [c, r] of [[40, 10], [45, 17], [52, 9], [58, 14]]) b.add(new Jellyfish(X(c), Y(r), { amp: 45 }));
+  b.add(new SodaVent(X(39), Y(F))); b.add(new SodaVent(X(51), Y(F)));
+  b.fill(56, 17, 59, F - 1, TL.SOLID); b.fill(57, 19, 58, F - 1, TL.EMPTY); b.fakeRect(56, 19, 56, F - 1); b.item('gold', 57, 21, { i: 1 });
+  b.drops(44, 8, 3, 0); b.drops(50, 18, 4, 0); weed(33, 120, 1); weed(46, 70, 0); coral(52, 1.1);
+  // C: checkpoint, a tunnel with a current only Pickle can walk against, the helmet and a clam in the ceiling
+  b.add(new ClamCheckpoint(X(68), Y(F), 0));
+  b.hint(70, 'w23-current', () => `В туннеле сильное течение — Банни его не переплыть. А меня не сносит: я пройду по дну! Меняемся — ${Input.label('swap')}.`);
+  b.fill(75, 5, 95, 17, TL.SOLID); b.add(new CurrentZone(75 * T, Y(18), 21 * T, 4 * T, -280, 0));
+  b.fill(84, 15, 86, 17, TL.EMPTY); b.item('gold', 85, 16, { i: 0 }); b.drops(78, 21, 4, 0); b.drops(89, 21, 4, 0);
+  b.add(new SodaVent(X(97), Y(F)));
+  b.block(100, 14, 'helmet');
+  b.fill(103, 5, 107, 8, TL.SOLID); b.fill(103, 9, 103, 10, TL.SOLID); b.fill(107, 9, 107, 10, TL.SOLID); b.fill(104, 11, 106, 11, TL.RIND); b.item('gold', 105, 10, { i: 2 });
+  b.hint(99, 'w23-helmet', 'Кокосовый шлем! Подплыви под ракушку в потолке и стукни её головой — шлем её разобьёт.');
+  b.add(new JarKid(X(108), Y(F), 1)); weed(101, 90, 2); coral(110, 1);
+  // D: herring gallery
+  pillar(b, 122, 123, 17); b.fill(130, 5, 131, 11, TL.SOLID); pillar(b, 138, 139, 16); b.fill(146, 5, 147, 12, TL.SOLID); pillar(b, 154, 155, 17); b.fill(162, 5, 163, 10, TL.SOLID);
+  b.add(new HerringSchool(117 * T, 135 * T, Y(9))); b.add(new HerringSchool(126 * T, 150 * T, Y(15))); b.add(new HerringSchool(140 * T, 168 * T, Y(20))); b.add(new HerringSchool(150 * T, 172 * T, Y(12)));
+  for (const c of [126, 142, 158]) b.add(new SodaVent(X(c), Y(F)));
+  b.add(new Jellyfish(X(134), Y(18), { amp: 30 })); b.add(new Jellyfish(X(166), Y(14), { amp: 50 }));
+  b.add(new CrabCaper(X(160), Y(F))); b.item('note', 150, F - 1, { id: 'w2-3:b' });
+  b.hint(117, 'w23-herring', 'Селёдки! Если оказаться с косяком на одной высоте — сверкнут и бросятся. Прячься за кораллы.');
+  b.drops(128, 7, 4, 0); b.drops(144, 19, 4, 0); weed(120, 100, 0); weed(136, 80, 1); weed(150, 120, 2); coral(165, 1.3);
+  // E: before the arena, and the arena
+  b.add(new ClamCheckpoint(X(172), Y(F), 1));
+  b.decoBack.push({ k: 'clam', x: X(174), y: Y(F) + 2 }); b.item('flipper', 174, F - 2);
+  const gL = b.add(new Gate(176, AR, F - 1)), gR = b.add(new Gate(205, AR, F - 1));
+  b.add(new SodaVent(X(179), Y(F))); b.add(new SodaVent(X(203), Y(F)));
+  const arena = { x0: 177 * T, x1: 205 * T, floor: Y(F), top: Y(AR), camMin: 176 * T, camMax: 206 * T };
+  const boss = b.add(new OctopusMarinade(arena));
+  b.add(new BossTrigger(179 * T));
+  coral(181, 1.4); coral(201, 1.2, 1); weed(185, 70, 0); weed(197, 90, 1);
+  // F: the bubble column up to the boat
+  b.add(new LiftZone(207 * T, Y(4), 8 * T, Y(F) - Y(4)));
+  b.add(new Boat(X(214), OPEN, 0));
+  return Object.assign({}, W2_DEF, {
+    id: '2-3', name: 'Арбузный Риф', theme: THEME_W2_3, level: b.L, ents: b.ents, decoBack: b.decoBack, decoFront: b.decoFront, fake: b.fake,
+    start: { x: X(3), y: Y(3) }, sheep: 2, arena, gates: [gL, gR], boss, bossRate: 1,
+    bossHint: `Осьминог Маринад! Когда он ударит банкой о дно — разбей банку: Хрустом (${Input.label('pickle')} за Пикля), ударом сверху или рывком ласта.`,
+    onBossDefeated(G) { G.pickle.speak('Осьминог сдулся и уплыл! Пузырьковый столб справа поднимет нас к лодке!', 5, true); }
+  });
+}
 LEVELS['2-dev'] = buildW2Dev;
+LEVELS['2-3'] = buildW2L3;
 LEVELS['2-2'] = buildW2L2;
 LEVELS['2-1'] = buildW2L1;

@@ -212,6 +212,94 @@ function check(name, ok, info) { results.push(ok); console.log(`${ok ? 'OK  ' : 
     check('2-2: без спасения Пупырки лодка не уплывает', (await h.state()).st === 'play');
   }
 
+  // ================= 2-3 Watermelon reef =================
+  {
+    const F = 22;
+    const fresh3 = async () => { await h.eval(() => { delete window.__dbg.Save.data.cherries['2-3']; }); await h.start('2-3'); await h.eval(() => { window.__dbg.Save.data.settings.hints = false; window.__dbg.Save.data.crunch = true; }); await h.step(0.2); };
+    const asBanni = () => h.eval(() => { const G = window.__G; G.player.setChar(G, 'banni'); });
+    const calm = () => h.eval(() => { for (const e of window.__G.ents) if (e.enemy && !e.boss) e.alive = false; });
+    const breathe = () => h.eval(() => { window.__G.player.air = 1; });
+    await fresh3();
+    s = await h.state();
+    check('2-3: начинаем за Пикля на скале над водой', s.char === 'pickle' && !s.wet);
+    await shot('w23-start');
+
+    // the lime flipper in the clam
+    await asBanni(); await h.put(X(12), Y(F - 4)); await h.step(1.0, ['ArrowDown']);
+    check('2-3: Банни ныряет за Лаймонным ластом', await h.eval(() => window.__G.player.power === 'flipper'));
+
+    // the current: Banni can't swim through the tunnel, Pickle walks it
+    await fresh3(); await calm(); await asBanni(); await h.put(X(73), Y(F)); await h.step(3, ['ArrowRight']);
+    s = await h.state();
+    check('2-3: течение не пускает Банни в туннель', s.x < 76 * T, `x=${s.x}`);
+    await fresh3(); await calm(); await h.put(X(73), Y(F)); await h.step(9, ['ArrowRight']);
+    s = await h.state();
+    check('2-3: Пикль проходит туннель по дну против течения', s.x > 96 * T && s.hp === 3, `x=${s.x} hp=${s.hp} air=${s.air}`);
+    await shot('w23-tunnel');
+    // the cherry in the tunnel pocket
+    await fresh3(); await calm(); await h.put(X(85), Y(F)); await h.step(0.3);
+    await h.step(0.3, ['Space']); await h.step(0.15); await h.step(0.3, ['Space']); await h.step(0.6);
+    check('2-3: вишенка в пещерке над туннелем', (await h.state()).gold[0] === '1');
+
+    // the cherry behind the fake coral
+    await fresh3(); await calm(); await h.put(X(54), Y(F)); await h.step(0.3); await h.step(1.2, ['ArrowRight']);
+    check('2-3: вишенка за ложным кораллом', (await h.state()).gold[1] === '1', (await h.state()).gold);
+
+    // the helmet block and the clam in the ceiling
+    await fresh3(); await calm(); await asBanni();
+    await h.put(X(100), Y(17)); await h.step(1.2, ['ArrowUp']); await breathe(); await h.step(1.0, ['ArrowUp']);
+    const helm = await h.eval(() => window.__G.player.helmet);
+    await h.put(X(105), Y(15)); await breathe(); await h.step(1.2, ['ArrowUp']); await h.step(0.5, ['ArrowUp']);
+    s = await h.state();
+    check('2-3: шлем из блока, головой разбита ракушка, третья вишенка', helm && s.gold[2] === '1', `шлем ${helm}, вишенки ${s.gold}`);
+    await shot('w23-helmet');
+
+    // herrings glint and dart when level with the hero
+    await fresh3(); await asBanni();
+    const hs = await h.eval(() => { const G = window.__G, f = G.ents.find(e => e.constructor.name === 'HerringSchool'); f.active = true; return [Math.round(f.cx), Math.round(f.cy)]; });
+    await h.put(hs[0] + 300, hs[1] + 25); await h.eval(() => { window.__G.player.inv = 5; });
+    let seen = new Set(); for (let i = 0; i < 90; i++) { await h.step(1 / 60); seen.add(await h.eval(() => window.__G.ents.find(e => e.constructor.name === 'HerringSchool').st)); await breathe(); }
+    check('2-3: косяк селёдок сверкает и бросается', seen.has('warn') && seen.has('dash'), [...seen].join(','));
+
+    // the boss: two jars broken with the crunch, then the tired octopus is stomped four times
+    await fresh3(); await h.put(X(177), Y(F)); await h.step(0.2); await h.step(0.6, ['ArrowRight']);
+    const boss = () => h.eval(() => { const b = window.__G.boss; return { st: b.st, hp: b.hp, x: b.ccx, y: b.ccy, jar: (b.jars.find(q => q.st === 'down') || {}).tx }; });
+    check('2-3: бой начинается, ворота закрыты', await h.eval(() => window.__G.bossActive && window.__G.def.gates.every(g => g.closed)));
+    for (let round = 0; round < 2; round++) {
+      let b = await boss();
+      for (let i = 0; i < 600 && !b.jar; i++) { await h.eval(() => { const p = window.__G.player; p.hp = 3; p.air = 1; }); await h.step(1 / 60); b = await boss(); }
+      if (round === 0) await shot('w23-boss');
+      await h.put(b.jar - 70, Y(F)); await h.eval(() => { window.__G.player.face = 1; }); await h.step(0.05); await h.step(0.05, ['KeyC']); await h.step(0.5);
+    }
+    let b = await boss();
+    check('2-3: обе банки разбиты Хрустом (−2 здоровья)', b.hp === 4, `hp=${b.hp}`);
+    await asBanni();
+    for (let hit = 0; hit < 4; hit++) {
+      for (let i = 0; i < 900; i++) { await h.eval(() => { const p = window.__G.player; p.hp = 3; p.air = 1; p.inv = 1; }); await h.step(1 / 60); b = await boss(); if (b.st === 'tired' && Math.abs(b.y - (Y(F) - 90)) < 5) break; }
+      if (hit === 0) await shot('w23-tired');
+      await h.put(b.x, b.y - 110); await h.eval(() => { const p = window.__G.player; p.vy = 200; p.inv = 0; }); await h.step(0.4, ['ArrowDown']);
+      if (process.env.DBG) console.log('  stomp', hit, JSON.stringify(await boss()), JSON.stringify(await h.state()));
+    }
+    await h.step(3.5);
+    b = await boss();
+    check('2-3: осьминог побеждён, ворота открыты', b.hp === 0 && await h.eval(() => !window.__G.bossActive && window.__G.def.gates.every(g => !g.closed)));
+    // the bubble column lifts Pickle to the boat
+    await h.eval(() => { const G = window.__G; G.player.setChar(G, 'pickle'); });
+    await h.put(X(213), Y(F)); await h.step(0.2);
+    for (let i = 0; i < 300; i++) { await h.step(1 / 60); if ((await h.state()).st !== 'play') break; await breathe(); }
+    s = await h.state();
+    check('2-3: пузырьковый столб поднимает Пикля к лодке, уровень пройден', s.st === 'win', `st=${s.st} x=${s.x} y=${s.y}`);
+    await h.step(4.5);
+    check('2-3: уровень засчитан', await h.eval(() => !!window.__dbg.Save.data.done['2-3']));
+
+    // dying in the boss fight resets the fight (jars come back)
+    await fresh3(); await h.put(X(177), Y(F)); await h.step(0.2); await h.step(0.6, ['ArrowRight']); await h.step(2);
+    await h.eval(() => { window.__G.boss.jars[0].st = 'gone'; window.__G.boss.hp = 5; const G = window.__G; G.lives = 3; G.player.die(G); });
+    await h.step(3);
+    b = await h.eval(() => { const b = window.__G.boss; return { st: b.st, hp: b.hp, jars: b.jars.map(j => j.st), active: window.__G.bossActive, gates: window.__G.def.gates.map(g => g.closed) }; });
+    check('2-3: после гибели бой начинается заново с полным здоровьем', b.hp === 6 && b.st === 'wait' && b.jars.every(j => j === 'held') && !b.active, JSON.stringify(b));
+  }
+
   check('нет ошибок в консоли', h.errors.length === 0, h.errors.join('\n'));
   await h.close();
   const failed = results.filter(x => !x).length;

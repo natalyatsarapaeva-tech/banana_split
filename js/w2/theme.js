@@ -152,3 +152,42 @@ const THEME_W2_2 = baseTheme({
     return THEME_W2_1.decoX(g, d, G);
   }
 });
+
+// ---------- 2-3: Watermelon reef (fully under water) ----------
+const THEME_W2_3 = baseTheme({
+  id: 'w2-3', world: 2, rim: 'rgba(120,20,40,0.3)', topEdge: '#2e7a26', drips: false,
+  bgKey: 'w2bg3', bgSrc: 'assets/w2/bg3.jpg',
+  // the painted reef must show through the water, so the water is only a tint here
+  waterCol: ['rgba(40,150,190,0.18)', 'rgba(10,60,110,0.42)'], waterTint: 'rgba(30,130,170,0.12)',
+  breakColors: ['#e8a0c8', '#f2b8d8', '#ffffff'], fallColors: ['#ffffff', '#bff4ff'],
+  bodyColor(c, r, d) { return d <= 0 ? '#f06a7a' : d <= 2 ? '#e05a6c' : '#c84a5c'; },
+  bodyDetail(g, c, r, d, x, y) {
+    for (let i = 0; i < 3; i++) { const h = hash2(c * 7 + i, r * 3); if (h < 0.7) { g.save(); g.translate(x + 6 + hash2(c + i, r) * 28, y + 6 + hash2(c, r + i) * 28); g.rotate(h * 3); ell(g, 0, 0, 2.2, 3.6); fs(g, '#2a1a1a'); g.restore(); } }
+  },
+  top() { return '#f2fff0'; }, // the rind: white band with a green edge
+  surfaceBits(g, c, r, at) { const p0 = at(0), p1 = at(1); g.fillStyle = '#5fbf45'; g.fillRect(p0.x, p0.y - 4, p1.x - p0.x, 4); },
+  plank(g, x, y, w) { rrect(g, x, y, w, 12, 5); fs(g, '#f06a7a', '#8a2a3a', 1.5); g.fillStyle = '#5fbf45'; g.fillRect(x + 2, y, w - 4, 3); for (let i = 10; i < w; i += 18) { ell(g, x + i, y + 7, 1.6, 2.6); fs(g, '#2a1a1a'); } },
+  special(g, L, c, r, t) { // RIND here is a clam shell
+    if (t !== TL.RIND) return false;
+    const x = c * T, y = r * T;
+    rrect(g, x + 1, y + 1, T - 2, T - 2, 10); fs(g, '#f2b8d8', '#8a3a6a', 1.8);
+    for (let i = -2; i <= 2; i++) line(g, x + 20, y + 36, x + 20 + i * 8, y + 6, 'rgba(138,58,106,0.5)', 1.3);
+    return true;
+  },
+  specialTop(g, L, c, r, t) { return t === TL.RIND; },
+  drawBackground(ctx, G, camX, camY) {
+    const W = G.viewW, th = this;
+    if (ASSETS[th.bgKey] === undefined && !th._bgReq) { th._bgReq = true; loadImage(th.bgKey, th.bgSrc).then(im => { if (!im) ASSETS[th.bgKey] = null; }); }
+    const gr = ctx.createLinearGradient(0, 0, 0, VIEW_H); gr.addColorStop(0, '#1a8aa8'); gr.addColorStop(1, '#0a3a5a'); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, VIEW_H);
+    if (ASSETS[th.bgKey]) parallaxImage(ctx, ASSETS[th.bgKey], camX, 0.12, -30 - camY * 0.1, VIEW_H * 1.15, W);
+  },
+  decoX(g, d, G) {
+    const t = G ? G.time : 0;
+    if (d.k === 'weed') { drawGummyWeed(g, d.x, d.y, d.h || 90, t, d.c || 0); return true; }
+    if (d.k === 'coral') { drawCoral(g, d.x, d.y, d.s || 1, d.c); return true; }
+    if (d.k === 'clam') { drawClam(g, d.x, d.y, { open: 0.7 }); return true; }
+    if (d.k === 'boat') { drawBoat(g, d.x, d.y, { t, sail: true }); return true; }
+    if (d.k === 'sign') return false;
+    return false;
+  }
+});

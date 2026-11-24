@@ -114,7 +114,7 @@ class Boat extends Ent {
     const w = G.waters.find(q => this.cx >= q.x && this.cx <= q.x + q.w); if (w) this.y = w.surfaceY(G.time) - 30 + Math.sin(this.t * 2) * 2;
     if (this.st === 'wait') {
       const p = G.player;
-      if (p.state === 'play' && overlap({ x: this.x, y: this.y - 40, w: this.w, h: this.h + 40 }, p)) {
+      if (p.state === 'play' && overlap({ x: this.x - 24, y: this.y - 40, w: this.w + 48, h: this.h + 50 }, p)) {
         if (this.o.cond && !this.o.cond(G)) { if (this.nagT <= 0) { this.nagT = 4; G.pickle.speak(this.o.wait, 4, true); } }
         else if (G.boatParts >= this.need) { this.st = 'go'; G.levelComplete(this); }
         else if (this.nagT <= 0) { this.nagT = 4; G.pickle.speak(`Лодка ещё не готова: частей ${G.boatParts} из ${this.need}. Они где-то на пляже!`, 4, true); }
@@ -255,4 +255,198 @@ class FreedSister extends Ent {
   constructor(x, y) { super(x - 10, y - 40, 20, 40); this.fx = x; this.fy = y; this.layer = 0; this.go = false; this.face = 1; }
   update(G, dt) { this.t += dt; if (this.go) { this.fx += 230 * dt; if (this.t > 30 || this.fx > G.level.W * T) this.alive = false; } }
   draw(g) { drawPupyrka(g, this.fx, this.fy, { t: this.t, happy: true, face: this.face }); }
+}
+
+// ---------- 2-3 Watermelon reef ----------
+// glowing jellyfish: bobs up and down; it stings from above, so stomping it hurts — dash, crunch or shoot it
+class Jellyfish extends Enemy {
+  constructor(x, y, o) { o = o || {}; super(x - 16, y - 18, 32, 30); this.bx = x; this.by = y; this.amp = o.amp || 40; this.ph = o.ph !== undefined ? o.ph : rnd(0, 6); this.drift = o.drift || 0; this.stompable = false; this.freezable = true; }
+  update(G, dt) {
+    if (!this.pre(G, dt)) return;
+    const cy = this.by + Math.sin(this.t * 1.4 + this.ph) * this.amp, cx = this.bx + Math.sin(this.t * 0.6 + this.ph) * this.drift;
+    this.x = cx - 16; this.y = cy - 18;
+  }
+  onTouch(G, p) { G.hint('jelly', `Медузы жгутся, даже сверху! Бей их рывком ласта (${Input.label('fire')}) или Хрустом.`); return false; }
+  draw(g) { drawJelly(g, this.cx, this.y + 18, { t: this.t }); this.drawIce(g); }
+}
+// a school of herrings: swims slowly; glints, then darts along its line when the hero is level with it
+class HerringSchool extends Enemy {
+  constructor(x0, x1, y) { super(x0, y - 18, 110, 36); this.x0 = x0; this.x1 = x1; this.vx = 60; this.st = 'swim'; this.timer = 0; this.dir = 1; this.freezable = false; this.slideable = false; }
+  update(G, dt) {
+    if (!this.pre(G, dt)) return;
+    const p = G.player, ahead = (p.cx - this.cx) * this.dir;
+    switch (this.st) {
+      case 'swim':
+        this.x += this.vx * dt; this.dir = sign(this.vx) || this.dir; this.face = this.dir;
+        if (this.x < this.x0) this.vx = Math.abs(this.vx); if (this.x + this.w > this.x1) this.vx = -Math.abs(this.vx);
+        if (p.state === 'play' && Math.abs(p.cy - this.cy) < 50) {
+          const d = p.cx - this.cx;
+          if (Math.abs(d) < 460) { this.dir = sign(d); this.face = this.dir; this.st = 'warn'; this.timer = 0.65; Audio2.play('select'); }
+        }
+        break;
+      case 'warn': this.timer -= dt; if (this.timer <= 0) { this.st = 'dash'; this.timer = 1.6; } break;
+      case 'dash': {
+        this.timer -= dt; const v = this.dir * 520 * dt;
+        if (rectSolid(G, this.x + v, this.y + 6, this.w, this.h - 12) || this.timer <= 0) { this.st = 'back'; } else this.x += v;
+        break;
+      }
+      case 'back': {
+        const home = clamp(this.cx, this.x0 + 55, this.x1 - 55); this.x = approach(this.x, home - 55, 90 * dt); this.face = sign(home - this.cx) || this.face;
+        if (Math.abs(this.cx - home) < 2) { this.st = 'swim'; this.vx = 60 * (this.face || 1); }
+        break;
+      }
+    }
+  }
+  draw(g) {
+    const glint = this.st === 'warn' && Math.floor(this.timer * 12) % 2 === 0;
+    for (let i = 0; i < 5; i++) { const ox = [-36, -12, 12, 36, 0][i], oy = [-8, 6, -6, 8, -14][i] + Math.sin(this.t * 3 + i) * 2; drawHerring(g, this.cx + ox * this.face, this.cy + oy, this.face, this.t + i, glint); }
+  }
+}
+// giant clam checkpoint: also refills the air
+class ClamCheckpoint extends UmbrellaCheckpoint {
+  update(G, dt) { const was = this.activeCP; super.update(G, dt); if (!was && this.activeCP) G.player.air = 1; if (this.activeCP && overlap(this, G.player)) G.player.air = Math.min(1, G.player.air + dt); }
+  draw(g) { drawClam(g, this.fx, this.fy, { open: this.activeCP ? 0.85 : 0.15, pearl: this.activeCP }); }
+}
+// a column of bubbles that lifts both heroes to the surface
+class LiftZone extends Ent {
+  constructor(x, y, w, h) { super(x, y, w, h); this.zone = 'lift'; }
+  draw(g, G) { for (let i = 0; i < 14; i++) { const k = ((G.time * 0.5 + hash2(i, 2)) % 1), bx = this.x + hash2(i, 7) * this.w, by = this.y + this.h - k * this.h; drawAirBubble(g, bx + Math.sin(G.time * 3 + i) * 5, by, 5 + hash2(i, 4) * 6, G.time + i); } }
+}
+function liftAt(G, x, y) { for (const z of G.zones) if (z.alive && z.zone === 'lift' && x > z.x && x < z.x + z.w && y > z.y && y < z.y + z.h) return z; return null; }
+
+// ---------- boss: Octopus Marinade ----------
+class MarinadeBlob extends Enemy {
+  constructor(x, y, tx, ty) { super(x - 10, y - 10, 20, 20); const d = Math.hypot(tx - x, ty - y) || 1; this.vx = (tx - x) / d * 150; this.vy = (ty - y) / d * 150; this.life = 4.5; this.bossShot = true; this.active = true; this.stompable = false; this.freezable = false; }
+  update(G, dt) { this.t += dt; this.life -= dt; this.x += this.vx * dt; this.y += this.vy * dt + Math.sin(this.t * 5) * 0.6; if (this.life <= 0 || rectSolid(G, this.x + 4, this.y + 4, 12, 12)) { this.alive = false; G.burst(this.cx, this.cy, 5, ['#c8d84a', '#8a9a2a']); } }
+  kill(G) { this.alive = false; G.burst(this.cx, this.cy, 5, ['#c8d84a', '#ffffff']); Audio2.play('pop'); }
+  draw(g) { circ(g, this.cx, this.cy, 10); fs(g, 'rgba(190,210,70,0.9)', '#5a6a1a', 1.5); circ(g, this.cx - 3, this.cy - 3, 3); fs(g, 'rgba(255,255,255,0.7)'); }
+}
+class BrineInk extends Ent {
+  constructor(x, y) { super(x - 90, y - 70, 180, 140); this.layer = 5; this.bossShot = true; this.life = 6; this.vx = rnd(-20, 20); }
+  update(G, dt) { this.t += dt; this.life -= dt; this.x += this.vx * dt; if (this.life <= 0) this.alive = false; }
+  draw(g) { drawInkCloud(g, this.cx, this.cy, 95, Math.min(0.85, this.life / 1.5, this.t * 2), this.t); }
+}
+// the jar in a tentacle: breakable only while it lies on the sea floor
+class JarTarget extends Ent {
+  constructor(boss, jar) { super(0, 0, 44, 56); this.boss = boss; this.jar = jar; this.bossShot = true; this.layer = 0; }
+  get crunchable() { return this.jar.st === 'down'; }
+  get poundable() { return this.jar.st === 'down'; }
+  update(G, dt) { const p = this.boss.jarPos(this.jar); this.x = p.x - 22; this.y = p.y - 30; if (this.jar.st === 'gone') this.alive = false; }
+  onCrunch(G) { if (this.jar.st === 'down') this.boss.breakJar(G, this.jar); }
+  onPound(G) { this.onCrunch(G); }
+}
+class OctopusMarinade extends Enemy {
+  constructor(ar) {
+    super(0, 0, 140, 130);
+    this.ar = ar; this.boss = true; this.active = true; this.name = 'Осьминог Маринад'; this.barColor = '#b05ac8';
+    this.freezable = false; this.slideable = false; this.starKill = false; this.harmful = false;
+    this.reset();
+  }
+  reset() {
+    this.hp = 6; this.maxHp = 6; this.st = 'wait'; this.timer = 0; this.flash = 0; this.alive = true; this.blobT = 2.5; this.ang = 0;
+    this.ccx = (this.ar.x0 + this.ar.x1) / 2; this.ccy = this.ar.top - 220;
+    this.jars = [{ side: -1, st: 'held', k: 0 }, { side: 1, st: 'held', k: 0 }]; this.slamJar = null; this.sync();
+  }
+  sync() { this.x = this.ccx - 70; this.y = this.ccy - 68; }
+  get phase() { return this.jars.some(j => j.st !== 'gone') ? 1 : this.hp > 2 ? 2 : 3; }
+  begin(G) { this.st = 'enter'; for (const j of this.jars) if (j.st !== 'gone') G.add(new JarTarget(this, j)); }
+  jarPos(j) {
+    const hx = this.ccx + j.side * 108, hy = this.ccy + 50 + Math.sin(this.t * 2 + j.side) * 6;
+    if (j.st === 'held' || j.st === 'gone') return { x: hx, y: hy };
+    const e = 1 - Math.pow(1 - clamp(j.k, 0, 1), 3), fy = this.ar.floor - 28;
+    return { x: lerp(hx, j.tx, e), y: lerp(hy, fy, e) };
+  }
+  hit(G) {
+    this.hp--; this.flash = 0.8; this.st = 'hit'; this.timer = 0.8; Audio2.play('bossHit'); G.shake(0.3); G.mercy(this.ar);
+    G.burst(this.ccx, this.ccy, 18, ['#c060b0', '#ffffff', '#ff9ad0']);
+  }
+  breakJar(G, j) {
+    j.st = 'gone'; Audio2.play('break'); G.burst(j.tx, this.ar.floor - 30, 22, ['#c8d84a', '#e8f0ff', '#ffffff', '#6a8a2a']);
+    this.slamJar = null; this.hit(G);
+    G.pickle.speak(this.jars.some(q => q.st !== 'gone') ? 'Одна банка разбита! Осталась ещё одна!' : 'Банок больше нет! Когда он устанет и опустится — прыгай ему на голову!', 4, true);
+  }
+  update(G, dt) {
+    this.t += dt; this.flash = Math.max(0, this.flash - dt);
+    const p = G.player, a = this.ar, hy = a.top + 130, mid = (a.x0 + a.x1) / 2;
+    switch (this.st) {
+      case 'wait': break;
+      case 'enter': this.ccy = approach(this.ccy, hy, 220 * dt); if (this.ccy >= hy) { this.st = 'hover'; this.timer = 1.4; Audio2.play('roar'); G.shake(0.4); } break;
+      case 'hover': {
+        const tx = clamp(p.cx, a.x0 + 160, a.x1 - 160);
+        this.ccx = approach(this.ccx, tx, 70 * dt); this.ccy = approach(this.ccy, hy + Math.sin(this.t * 1.5) * 12, 160 * dt);
+        this.blobT -= dt;
+        if (this.blobT <= 0 && this.phase < 3) { this.blobT = this.phase === 1 ? 2.6 : 2; G.add(new MarinadeBlob(this.ccx, this.ccy + 40, p.cx, p.cy)); Audio2.play('pea'); }
+        this.timer -= dt;
+        if (this.timer > 0) break;
+        if (this.phase === 1) {
+          const held = this.jars.filter(j => j.st === 'held'), j = held[Math.floor(rnd(0, held.length))] || held[0];
+          if (!j) break;
+          j.st = 'reach'; j.k = 0; j.tx = clamp(p.cx, a.x0 + 60, a.x1 - 60); this.slamJar = j; this.st = 'slam';
+        } else if (this.phase === 2) {
+          this.st = 'ink'; this.timer = 1.2; Audio2.play('roar');
+          for (let i = 0; i < 2; i++) G.add(new BrineInk(rnd(a.x0 + 120, a.x1 - 120), rnd(a.top + 120, a.floor - 120)));
+          if (G.countOf(Jellyfish) < 2) { const jf = G.add(new Jellyfish(rnd(a.x0 + 80, a.x1 - 80), a.top + 200, { amp: 60 })); jf.active = true; jf.bossShot = true; }
+          G.hint('ink', 'Рассольные чернила! Сквозь них плохо видно, но они не жгутся. Подожди — скоро он устанет.');
+        } else { this.st = 'circle'; this.timer = 4.5; this.ang = Math.atan2(this.ccy - (a.top + a.floor) / 2, this.ccx - mid); Audio2.play('roar'); }
+        break;
+      }
+      case 'slam': {
+        const j = this.slamJar;
+        if (!j || j.st === 'gone') { this.st = 'hover'; this.timer = 1.8; break; }
+        if (j.st === 'reach') {
+          j.k += dt / 0.95;
+          if (j.k >= 1) {
+            j.k = 1; j.st = 'down'; j.downT = 2.6; G.shake(0.35); Audio2.play('thud'); G.burst(j.tx, a.floor - 6, 14, ['#ffffff', '#f06a7a']);
+            if (p.state === 'play' && Math.abs(p.cx - j.tx) < 46 && p.bottom > a.floor - 70) p.hurt(G, { cx: j.tx });
+            G.hint('jars', `Банка на дне! Разбей её Хрустом (${Input.label('pickle')}), ударом сверху или рывком ласта!`);
+          }
+        } else if (j.st === 'down') { j.downT -= dt; if (j.downT <= 0) j.st = 'rise'; }
+        else if (j.st === 'rise') { j.k -= dt / 0.6; if (j.k <= 0) { j.k = 0; j.st = 'held'; this.slamJar = null; this.st = 'hover'; this.timer = 1.6; } }
+        break;
+      }
+      case 'ink': this.timer -= dt; if (this.timer <= 0) { this.st = 'tired'; this.timer = 2.8; } break;
+      case 'tired': this.ccy = approach(this.ccy, a.floor - 90, 300 * dt); this.timer -= dt; if (this.timer <= 0) { this.st = 'hover'; this.timer = 2.4; } break;
+      case 'circle': {
+        this.ang += dt * 2.3; const rx = (a.x1 - a.x0) / 2 - 120, ry = (a.floor - a.top) / 2 - 100;
+        this.ccx = approach(this.ccx, mid + Math.cos(this.ang) * rx, 600 * dt); this.ccy = approach(this.ccy, (a.top + a.floor) / 2 + Math.sin(this.ang) * ry, 600 * dt);
+        this.timer -= dt; if (this.timer <= 0) { this.st = 'tired'; this.timer = 2.4; G.hint('tired3', 'Выдохся! Бей, пока он у дна!'); }
+        break;
+      }
+      case 'hit': this.timer -= dt; if (this.timer <= 0) { if (this.hp <= 0) { this.st = 'dead'; this.timer = 2; G.clearBossShots(); Audio2.play('win'); } else { this.st = 'hover'; this.timer = 1.6; } } break;
+      case 'dead':
+        this.timer -= dt; this.ccy -= 40 * dt;
+        if (Math.random() < 0.5) G.burst(this.ccx + rnd(-60, 60), this.ccy + rnd(-50, 50), 3, ['#c060b0', '#ffffff']);
+        if (this.timer <= 0) { this.alive = false; G.burst(this.ccx, this.ccy, 40, ['#c060b0', '#ff9ad0', '#ffffff']); G.bossDefeated(this); }
+        break;
+    }
+    this.harmful = ['hover', 'slam', 'ink', 'circle', 'enter'].includes(this.st);
+    this.sync();
+  }
+  onStomp(G, p) {
+    if (this.st === 'tired') { this.hit(G); p.vy = -620; p.cutOk = false; return 'none'; }
+    if (this.harmful) { Audio2.play('bump'); return 'bounce'; }
+    return 'none';
+  }
+  onDash(G, p) { if (this.st === 'tired') { this.hit(G); p.dashT = 0; p.vx = -sign(p.vx) * 200; } else if (this.st !== 'hit' && this.st !== 'dead') { Audio2.play('bump'); p.dashT = 0; } }
+  onCrunch(G, p) { if (this.st === 'tired') this.hit(G); }
+  onShot(G) { Audio2.play('bump'); return true; }
+  onPickle(G) { Audio2.play('bump'); }
+  kill() { }
+  draw(g, G) {
+    if (this.st === 'wait') return;
+    const k = this.st === 'dead' ? Math.max(0.2, this.timer / 2) : 1;
+    // tentacle arms with the jars
+    for (const j of this.jars) {
+      if (j.st === 'gone') continue;
+      const jp = this.jarPos(j), sx = this.ccx + j.side * 40, sy = this.ccy + 40;
+      g.beginPath(); g.moveTo(sx, sy); g.quadraticCurveTo(sx + j.side * 60, sy + 10, jp.x, jp.y - 20); g.strokeStyle = '#4a1a4a'; g.lineWidth = 20; g.lineCap = 'round'; g.stroke();
+      g.strokeStyle = this.flash > 0 ? '#ff9ad0' : '#a8509a'; g.lineWidth = 15; g.stroke();
+      if (j.st === 'reach' && j.k < 1) { g.save(); g.globalAlpha = 0.25 + j.k * 0.4; ell(g, j.tx, this.ar.floor - 2, 26 + j.k * 16, 6); fs(g, '#2a0a2a'); g.restore(); }
+      drawMarinadeJar(g, jp.x, jp.y, j.st === 'down' ? 0 : j.side * 0.35, 1);
+      if (j.st === 'down' && Math.floor(this.t * 6) % 2 === 0) sparkle(g, jp.x + 18, jp.y - 34, 6, '#ffffff');
+    }
+    g.save(); g.translate(this.ccx, this.ccy); g.scale(k, k); if (this.st === 'hit') g.scale(1.1, 0.88);
+    drawOctopus(g, 0, 0, { t: this.t, flash: this.flash > 0 && Math.floor(this.flash * 12) % 2 === 0, dizzy: this.st === 'tired', angry: this.phase === 3, look: clamp((G.player.cx - this.ccx) / 200, -1, 1) });
+    g.restore();
+  }
 }
