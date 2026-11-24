@@ -26,9 +26,15 @@ function serve() {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
-  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
+  // Графика новых миров появляется постепенно: её отсутствие — предупреждение, а не ошибка
+  const OPTIONAL = /\/assets\/w\d+\//;
+  const missing = new Set();
   page.on('requestfailed', r => errors.push('request failed: ' + r.url()));
-  page.on('response', r => { if (r.status() >= 400) errors.push(`HTTP ${r.status()}: ${r.url()}`); });
+  page.on('response', r => {
+    if (r.status() < 400) return;
+    if (OPTIONAL.test(r.url())) missing.add(new URL(r.url()).pathname); else errors.push(`HTTP ${r.status()}: ${r.url()}`);
+  });
   await page.goto(url);
   await page.waitForFunction(() => window.__G && window.__G.state !== 'boot', null, { timeout: 15000 });
 
@@ -57,8 +63,25 @@ function serve() {
     const ok = errs.length === 0 && st.err !== 'block';
     if (!ok) failed++;
     console.log(`${ok ? 'OK  ' : 'FAIL'} ${id} «${st.name}» state=${st.state} x=${st.x}` + (errs.length ? '\n     ' + errs.join('\n     ') : ''));
-    await page.evaluate(() => { window.__G.toMap ? window.__G.toMap() : 0; });
   }
+
+  // Карты миров: мир 1, затем мир 2 (открыт после финала мира 1)
+  for (const [wi, label] of [[0, 'карта мира 1'], [1, 'карта мира 2']]) {
+    const before = errors.length;
+    const st = await page.evaluate(wi => {
+      const { UI, Save, WORLDS } = window.__dbg;
+      if (wi > 0) Save.data.done[5] = 1;
+      UI.map(undefined, wi);
+      return { world: UI.world().name, nodes: document.querySelectorAll('.node').length, levels: WORLDS[wi].levels.length };
+    }, wi);
+    await page.waitForTimeout(400);
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/map${wi + 1}.png` });
+    const errs = errors.slice(before);
+    const ok = errs.length === 0 && st.nodes === st.levels;
+    if (!ok) failed++;
+    console.log(`${ok ? 'OK  ' : 'FAIL'} ${label} «${st.world}» узлов ${st.nodes}/${st.levels}` + (errs.length ? '\n     ' + errs.join('\n     ') : ''));
+  }
+  if (missing.size) console.log('\nПока нет графики (не ошибка): ' + [...missing].join(', '));
   await browser.close(); srv.close();
   if (failed) { console.log(`\n${failed} уровн(ей) с ошибками`); process.exit(1); }
   console.log('\nВсе уровни запускаются без ошибок');

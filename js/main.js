@@ -316,13 +316,13 @@ const G = window.__G = {
   showResults() {
     const id = this.levelId, d = this.def;
     const bonus = this.stats.sheep * 10;
-    Save.data.unlocked = Math.max(Save.data.unlocked, id + 1);
+    if (typeof id === 'number') Save.data.unlocked = Math.max(Save.data.unlocked, id + 1);
     Save.data.done[id] = 1;
     Save.data.cherries[id] = this.gold.slice();
     const sh = Save.data.sheep[id] || 0; Save.data.sheep[id] = Math.max(sh, this.stats.sheep);
     Save.save();
     this.setState('results'); Audio2.muffle(false);
-    UI.results({ name: d.name, drops: this.stats.drops, bonus, gold: this.gold, sheep: this.stats.sheep, sheepMax: d.sheep, enemies: this.stats.enemies, id });
+    UI.results({ name: d.name, sheepName: d.sheepName, drops: this.stats.drops, bonus, gold: this.gold, sheep: this.stats.sheep, sheepMax: d.sheep, enemies: this.stats.enemies, id });
   },
   // ---------------- render ----------------
   render() {
@@ -509,7 +509,7 @@ const HUD = {
     g.save(); g.globalAlpha = k;
     const W = G.viewW;
     rrect(g, W / 2 - 230, VIEW_H / 2 - 70, 460, 120, 26); fs(g, 'rgba(255,248,236,0.95)', '#c98b4e', 4);
-    this.text(g, 'Уровень ' + G.levelId, W / 2, VIEW_H / 2 - 36, 22, '#c97a3a', 'center');
+    this.text(g, 'Уровень ' + levelInfo(G.levelId).num, W / 2, VIEW_H / 2 - 36, 22, '#c97a3a', 'center');
     this.text(g, G.def.name, W / 2, VIEW_H / 2 + 6, 40, '#6a3214', 'center');
     g.restore();
   }
@@ -665,7 +665,7 @@ const Scenes = {
     g.restore();
   },
   mapRect(W) { const areaH = VIEW_H - 112; const sc = Math.min(W / 1376, areaH / 768); return { s: sc, x: (W - 1376 * sc) / 2, y: 4 }; },
-  mapNodes(W) { const r = this.mapRect(W); return LEVEL_INFO.map(i => ({ x: r.x + i.node[0] * r.s, y: r.y + i.node[1] * r.s })); },
+  mapNodes(W) { const r = this.mapRect(W); return UI.world().levels.map(i => ({ x: r.x + i.node[0] * r.s, y: r.y + i.node[1] * r.s })); },
   pill(g, x, y, text, size, col, bg) {
     g.font = `900 ${size}px Nunito, sans-serif`; const w = g.measureText(text).width + size * 1.1, h = size * 1.6;
     rrect(g, x - w / 2, y - h / 2, w, h, h / 2); fs(g, bg || 'rgba(255,248,236,0.92)', 'rgba(106,50,20,0.7)', 1.6);
@@ -676,13 +676,19 @@ const Scenes = {
     g.fillStyle = '#17110f'; g.fillRect(0, 0, W, VIEW_H);
     for (let i = 0; i < 30; i++) { g.globalAlpha = 0.4 + Math.sin(t * 2 + i) * 0.3; sparkle(g, (i * 97) % W, (i * 61) % (VIEW_H - 110), 1.5 + (i % 3), '#fff6d0'); }
     g.globalAlpha = 1;
-    if (ASSETS.map) g.drawImage(ASSETS.map, r.x, r.y, 1376 * r.s, 768 * r.s);
+    const w = UI.world(), img = ASSETS[w.map];
+    if (img) g.drawImage(img, r.x, r.y, 1376 * r.s, 768 * r.s);
+    else if (w.mapBg) {
+      const gr = g.createLinearGradient(0, r.y, 0, r.y + 768 * r.s); gr.addColorStop(0, w.mapBg[0]); gr.addColorStop(1, w.mapBg[1]);
+      rrect(g, r.x, r.y, 1376 * r.s, 768 * r.s, 24 * r.s); fs(g, gr, 'rgba(74,36,16,0.6)', 3);
+    }
     const fsz = Math.max(10, Math.round(22 * r.s));
-    LEVEL_INFO.forEach((info) => { const [lx, ly] = info.label; this.pill(g, r.x + lx * r.s, r.y + ly * r.s, info.name, fsz, info.bonus ? '#a03a7a' : '#6a3214'); });
-    this.pill(g, r.x + 688 * r.s, r.y + 742 * r.s, 'Сплит-мир', Math.round(fsz * 1.3), '#b03070', 'rgba(255,240,250,0.95)');
+    // map art may carry its own captions; without art, captions are drawn under the nodes
+    w.levels.forEach((info) => { const lb = info.label || (img ? null : [info.node[0], info.node[1] + 44]); if (lb) this.pill(g, r.x + lb[0] * r.s, r.y + lb[1] * r.s, info.name, fsz, info.bonus ? '#a03a7a' : '#6a3214'); });
+    if (w.titlePill) this.pill(g, r.x + 688 * r.s, r.y + 742 * r.s, w.titlePill, Math.round(fsz * 1.3), '#b03070', 'rgba(255,240,250,0.95)');
     const nodes = this.mapNodes(W);
     nodes.forEach((n, i) => {
-      const info = LEVEL_INFO[i], un = UI.levelUnlocked(i + 1), sel = UI.mapSel === i, done = Save.data.done[i + 1];
+      const info = w.levels[i], un = UI.levelUnlocked(info), sel = UI.mapSel === i, done = Save.data.done[info.id];
       const rr = (sel ? 17 : 14) * Math.max(0.8, r.s * 1.6);
       if (sel) { circ(g, n.x, n.y, rr + 7 + Math.sin(t * 5) * 2); fs(g, 'rgba(255,255,255,0.75)'); }
       circ(g, n.x, n.y, rr); fs(g, !un ? '#9a8f88' : info.bonus ? '#ff7ac0' : done ? '#7ac04a' : '#ffcf4a', '#4a2410', 2.6);
@@ -690,7 +696,8 @@ const Scenes = {
       g.fillText(!un ? '🔒' : info.bonus ? '★' : String(i + 1), n.x, n.y + 1);
     });
     const sn = nodes[UI.mapSel];
-    g.save(); g.translate(sn.x - 40, sn.y + 34); g.scale(0.34, 0.34); drawBalloon(g, 0, Math.sin(t * 2) * 6, { t, captain: true }); g.restore();
+    if (w.cursor === 'boat' && typeof drawMapBoat === 'function') drawMapBoat(g, sn.x - 36, sn.y + 30, r.s, t);
+    else { g.save(); g.translate(sn.x - 40, sn.y + 34); g.scale(0.34, 0.34); drawBalloon(g, 0, Math.sin(t * 2) * 6, { t, captain: true }); g.restore(); }
   },
   finale(g, G) {
     const W = G.viewW, t = G.stateT, k = UI.finIdx;
@@ -728,7 +735,7 @@ const Scenes = {
 };
 // ---------------- UI (HTML overlays) ----------------
 const UI = {
-  root: document.getElementById('ui'), el: null, cur: null, focus: 0, under: null, introIdx: 0, mapSel: 0, onBack: null,
+  root: document.getElementById('ui'), el: null, cur: null, focus: 0, under: null, introIdx: 0, mapSel: 0, worldIdx: 0, onBack: null,
   html(id, inner, cls) {
     this.root.innerHTML = `<div class="scr ${cls || ''}" id="scr-${id}">${inner}</div>`;
     this.el = this.root.firstChild; this.cur = id; this.focus = 0; this.onBack = null;
@@ -745,7 +752,8 @@ const UI = {
     if (!this.el) return;
     const bs = this.btns();
     if (this.cur === 'map') {
-      if (Input.pressed('right') || Input.pressed('up')) this.setMap(Math.min(5, this.mapSel + 1));
+      if (Input.pressed('swap')) { this.switchWorld(); return; }
+      if (Input.pressed('right') || Input.pressed('up')) this.setMap(Math.min(this.world().levels.length - 1, this.mapSel + 1));
       if (Input.pressed('left') || Input.pressed('down')) this.setMap(Math.max(0, this.mapSel - 1));
       if (Input.pressed('confirm') && !this.el.querySelector('#m-play')) { Input.clear(); Audio2.play('bump'); return; }
     } else if (bs.length) {
@@ -766,7 +774,7 @@ const UI = {
         <button id="b-set">Настройки</button>
       </div>
       <div class="foot">Музыка: «Morning Adventure» · ${IS_TOUCH ? 'Сенсорное управление' : 'Клавиатура или геймпад'}</div>`);
-    this.el.querySelector('#b-play').onclick = () => { Audio2.music(1); if (!Save.data.introSeen) this.intro(); else this.map(); };
+    this.el.querySelector('#b-play').onclick = () => { Audio2.music(1); if (!Save.data.introSeen) this.intro(); else this.map(undefined, Save.data.world); };
     const bn = this.el.querySelector('#b-new');
     if (bn) bn.onclick = () => this.confirm('Начать заново?', 'Прогресс (открытые уровни и вишенки) будет стёрт.', () => { Save.reset(); Audio2.music(1); this.intro(); }, () => this.title());
     this.el.querySelector('#b-set').onclick = () => this.settings(() => this.title());
@@ -820,47 +828,65 @@ const UI = {
       this.el.querySelector('#i-skip').onclick = done;
       this.onBack = done;
     };
-    const done = () => { Save.data.introSeen = true; Save.save(); this.map(); };
+    const done = () => { Save.data.introSeen = true; Save.save(); this.map(undefined, 0); };
     render();
   },
   setMap(i) {
     if (i === this.mapSel) return;
     this.mapSel = i; Audio2.play('select'); this.mapPanel();
   },
-  levelUnlocked(id) {
-    if (id === 6) { let n = 0; for (let k = 1; k <= 5; k++) n += (Save.data.cherries[k] || []).reduce((a, b) => a + b, 0); return n >= 15 || !!Save.data.done[5]; }
-    return id <= Save.data.unlocked;
+  world() { return WORLDS[this.worldIdx] || WORLDS[0]; },
+  worldsOpen() { return WORLDS.filter(w => w.unlocked()); },
+  levelUnlocked(info) { return this.world().levelUnlocked(info); },
+  // show the map of the world that holds level `id`, with that level (or the one after it) selected
+  mapAt(id, next) {
+    const wi = WORLDS.indexOf(worldOfLevel(id)), w = WORLDS[wi], info = w.levels.find(l => l.id === id);
+    this.map(next ? w.nextAfter(info) : w.levels.indexOf(info), wi);
   },
-  map(sel) {
+  switchWorld() {
+    const open = this.worldsOpen(); if (open.length < 2) return;
+    const k = open.indexOf(this.world()), nw = open[(k + 1) % open.length];
+    Audio2.play('select'); this.map(undefined, WORLDS.indexOf(nw));
+  },
+  map(sel, wi) {
     G.setState('map'); this.under = 'map'; G.level = null; canvas.style.filter = '';
     Audio2.muffle(false); Audio2.setRate(1); Audio2.setTone(20000); Audio2.music(1);
-    if (sel !== undefined) this.mapSel = clamp(sel, 0, 5); else this.mapSel = clamp(Math.min(Save.data.unlocked, 5) - 1, 0, 4);
+    if (wi !== undefined && WORLDS[wi] && WORLDS[wi].unlocked()) this.worldIdx = wi;
+    if (!this.world().unlocked()) this.worldIdx = 0;
+    if (Save.data.world !== this.worldIdx) { Save.data.world = this.worldIdx; Save.save(); }
+    const w = this.world();
+    if (!ASSETS[w.map] && w.mapSrc) loadImage(w.map, w.mapSrc);
+    this.mapSel = sel !== undefined ? clamp(sel, 0, w.levels.length - 1) : w.defaultSel();
     this.mapPanel();
   },
   mapPanel() {
-    const i = this.mapSel, id = i + 1, info = LEVEL_INFO[i], unlocked = this.levelUnlocked(id);
+    const w = this.world(), i = this.mapSel, info = w.levels[i], id = info.id, unlocked = this.levelUnlocked(info);
     const nodes = Scenes.mapNodes(G.viewW);
-    let body, stats = '';
+    let stats = '';
     if (info.bonus) {
-      let n = 0; for (let k = 1; k <= 5; k++) n += (Save.data.cherries[k] || []).reduce((a, b) => a + b, 0);
+      const n = worldCherries(w);
       stats = unlocked ? (Save.data.best.bonus ? `Рекорд: ${fmtTime(Save.data.best.bonus)}` : 'Забег на время по радуге!') : `🔒 Открывается за 15 золотых вишенок (у тебя ${n}) или после финала`;
     } else if (unlocked) {
       const ch = Save.data.cherries[id] || [0, 0, 0];
-      const notes = Object.keys(NOTES).filter(k => k.startsWith('l' + id));
+      const notes = Object.keys(NOTES).filter(k => k.startsWith(info.notes));
       const nn = notes.filter(n => Save.data.notes[n]).length;
-      stats = `Вишенки ${ch.map(c => c ? '🍒' : '◌').join('')} · Записки ${nn}/${notes.length} · Овечки ${Save.data.sheep[id] || 0}/${[0, 2, 3, 2, 2, 2][id]}`;
-    } else stats = `🔒 Сначала пройди «${LEVEL_INFO[i - 1].name}»`;
+      stats = `Вишенки ${ch.map(c => c ? '🍒' : '◌').join('')} · Записки ${nn}/${notes.length}` + (info.sheep ? ` · ${w.sheepName || 'Овечки'} ${Save.data.sheep[id] || 0}/${info.sheep}` : '');
+    } else if (info.soon) stats = '🔒 Скоро! Этот остров ещё строится';
+    else stats = `🔒 Сначала пройди «${w.levels[i - 1].name}»`;
+    const others = this.worldsOpen().filter(o => o !== w);
+    const thumb = unlocked && info.thumb ? `<img class="mthumb" src="${info.thumb}" alt="">` : `<div class="mthumb lockedthumb">${unlocked ? '🏝️' : '🔒'}</div>`;
     this.html('map', `
       <div class="mapnodes">${nodes.map((n, k) => `<div class="node" data-k="${k}" style="left:calc(var(--u)*${n.x - 24}px);top:calc(var(--u)*${n.y - 24}px)"></div>`).join('')}</div>
       <div class="mapbar">
-        ${unlocked ? `<img class="mthumb" src="${info.thumb}" alt="">` : '<div class="mthumb lockedthumb">🔒</div>'}
-        <div class="minfo"><div class="lvl">${info.bonus ? 'Бонус' : 'Уровень ' + id}</div><div class="mname">${info.name}</div><div class="mstats">${stats}</div></div>
+        ${thumb}
+        <div class="minfo"><div class="lvl">${info.bonus ? 'Бонус' : 'Уровень ' + info.num}</div><div class="mname">${info.name}</div><div class="mstats">${stats}</div></div>
         <div class="mbtns">${unlocked ? `<button id="m-play">${Save.data.done[id] ? 'Ещё раз' : 'Играть'} ▸</button>` : ''}
-          <div class="mrow"><button id="m-back" class="ghost">Меню</button>${Save.data.done[5] ? '<button id="m-end" class="ghost">Финал</button>' : ''}</div></div>
+          <div class="mrow"><button id="m-back" class="ghost">Меню</button>${others.length ? `<button id="m-world" class="ghost" title="${others[0].name}">⇄ Мир ${others[0].id}</button>` : ''}${w.id === 1 && Save.data.done[5] ? '<button id="m-end" class="ghost">Финал</button>' : ''}</div></div>
       </div>`);
-    this.el.querySelectorAll('.node').forEach(n => n.onclick = () => { const k = +n.dataset.k; if (k === this.mapSel && this.levelUnlocked(k + 1)) G.startLevel(k + 1); else this.setMap(k); });
+    this.el.querySelectorAll('.node').forEach(n => n.onclick = () => { const k = +n.dataset.k; if (k === this.mapSel && this.levelUnlocked(w.levels[k])) G.startLevel(w.levels[k].id); else this.setMap(k); });
     const pb = this.el.querySelector('#m-play'); if (pb) pb.onclick = () => G.startLevel(id);
     this.el.querySelector('#m-back').onclick = () => this.title();
+    const wb = this.el.querySelector('#m-world'); if (wb) wb.onclick = () => this.switchWorld();
     const eb = this.el.querySelector('#m-end'); if (eb) eb.onclick = () => this.finale(false);
     this.onBack = () => this.title();
     this.focus = 0; this.paint();
@@ -899,7 +925,7 @@ const UI = {
       this.el.querySelector('#f-next').onclick = () => { if (this.finIdx < 3) { this.finIdx++; G.stateT = 0; render(); } else done(); };
       this.onBack = done;
     };
-    const done = () => { if (fromGame && G.level) G.showResults(); else this.map(5); };
+    const done = () => { if (fromGame && G.level) G.showResults(); else this.map(5, 0); };
     render();
   },
   pause() {
@@ -908,7 +934,7 @@ const UI = {
     this.el.querySelector('#p-go').onclick = () => G.resume();
     this.el.querySelector('#p-re').onclick = () => G.startLevel(G.levelId);
     this.el.querySelector('#p-set').onclick = () => this.settings(() => { G.setState('pause'); this.pause(); });
-    this.el.querySelector('#p-map').onclick = () => this.map(G.levelId - 1);
+    this.el.querySelector('#p-map').onclick = () => this.mapAt(G.levelId);
     this.onBack = () => G.resume();
   },
   note(text, done) {
@@ -925,22 +951,22 @@ const UI = {
     this.html('gameover', `<div class="card"><h2>Ой! Банни перезрел…</h2><p>Жизни закончились, но Пикль верит в друга. Попробуем ещё раз?</p><div class="menu">
       <button id="g-cont">Продолжить с флажка</button><button id="g-map">На карту</button></div></div>`, 'dim');
     this.el.querySelector('#g-cont').onclick = () => { G.lives = Save.data.settings.easy ? 5 : 3; this.hide(); G.setState('play'); G.respawn(); Input.clear(); };
-    this.el.querySelector('#g-map').onclick = () => this.map(G.levelId - 1);
+    this.el.querySelector('#g-map').onclick = () => this.mapAt(G.levelId);
   },
   results(r) {
     const nG = r.gold.reduce((a, b) => a + b, 0);
     this.html('results', `<div class="card"><div class="lvl">Уровень пройден!</div><h2>${r.name}</h2>
       <div class="tally">
         <div><span>Шоколадные капли</span><b>${r.drops + r.bonus}</b></div>
-        <div><span>Спасённые овечки</span><b>${r.sheep}/${r.sheepMax}${r.bonus ? ` <small>(+${r.bonus} к каплям)</small>` : ''}</b></div>
+        <div><span>${r.sheepName || 'Спасённые овечки'}</span><b>${r.sheep}/${r.sheepMax}${r.bonus ? ` <small>(+${r.bonus} к каплям)</small>` : ''}</b></div>
         <div><span>Золотые вишенки</span><b>${r.gold.map(c => c ? '🍒' : '◌').join(' ')}</b></div>
         <div><span>Побеждено врагов</span><b>${r.enemies}</b></div>
       </div>
       ${nG < 3 ? '<p class="small">Вишенки прячутся в секретных местах — Пикль иногда на них намекает!</p>' : '<p class="small">Все вишенки собраны — ты настоящий исследователь!</p>'}
       <div class="menu row"><button id="r-map" class="ghost">На карту</button><button id="r-next">Дальше ▸</button></div></div>`, 'dim');
     this.focus = 1; this.paint();
-    this.el.querySelector('#r-map').onclick = () => this.map(r.id - 1);
-    this.el.querySelector('#r-next').onclick = () => this.map(Math.min(5, r.id));
+    this.el.querySelector('#r-map').onclick = () => this.mapAt(r.id);
+    this.el.querySelector('#r-next').onclick = () => this.mapAt(r.id, true);
   },
   bonusResults(r) {
     this.html('results', `<div class="card"><div class="lvl">Финиш!</div><h2>Радужный Топпинг</h2>
@@ -952,7 +978,7 @@ const UI = {
       </div>
       <div class="menu row"><button id="r-map" class="ghost">На карту</button><button id="r-again">Ещё забег ▸</button></div></div>`, 'dim');
     this.focus = 1; this.paint();
-    this.el.querySelector('#r-map').onclick = () => this.map(5);
+    this.el.querySelector('#r-map').onclick = () => this.map(5, 0);
     this.el.querySelector('#r-again').onclick = () => G.startLevel(6);
   },
   ending() { this.finale(false); }
@@ -1049,4 +1075,4 @@ async function boot() {
   requestAnimationFrame(frame);
 }
 boot();
-window.__dbg = { Input, Save, Audio2, UI, Scenes, TL, LEVELS, Touch, HUD };
+window.__dbg = { Input, Save, Audio2, UI, Scenes, TL, LEVELS, Touch, HUD, WORLDS, levelIds };
